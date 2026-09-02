@@ -1,0 +1,137 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                        Int      @id @default(autoincrement())
+  telegramId                String   @unique
+  firstName                 String
+  lastName                  String?
+  username                  String?
+  phone                     String?
+  cityId                    Int?
+  city                      City?    @relation(fields: [cityId], references: [id])
+  balance                   Float    @default(0)
+  role                      String   @default("USER") // "USER" or "ADMIN"
+  commissionOverridePercent Float?   // 0.0 for first 100 users, null for 10% standard
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  createdOrders     Order[]            @relation("CustomerOrders")
+  performedOrders   Order[]            @relation("PerformerOrders")
+  applications      OrderApplication[]
+  topups            TopupRequest[]
+  transactions      Transaction[]
+  disputes          Dispute[]
+}
+
+model City {
+  id      Int               @id @default(autoincrement())
+  name    String            @unique
+  users   User[]
+  orders  Order[]
+  banners SponsoredBanner[]
+}
+
+model Category {
+  id         Int     @id @default(autoincrement())
+  name       String  @unique
+  icon       String
+  isDelivery Boolean @default(false)
+  orders     Order[]
+}
+
+model Order {
+  id             Int      @id @default(autoincrement())
+  title          String
+  description    String?
+  price          Float
+  address        String?
+  pickupAddress  String?
+  dropoffAddress String?
+  status         String   @default("OPEN") // "OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED"
+  
+  customerId  Int
+  customer    User     @relation("CustomerOrders", fields: [customerId], references: [id])
+  
+  performerId Int?
+  performer   User?    @relation("PerformerOrders", fields: [performerId], references: [id])
+  
+  categoryId  Int
+  Category    Category @relation(fields: [categoryId], references: [id])
+  
+  cityId      Int?
+  city        City?    @relation(fields: [cityId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  applications OrderApplication[]
+  disputes     Dispute[]
+}
+
+model OrderApplication {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  comment     String?
+  status      String   @default("PENDING") // "PENDING", "ACCEPTED", "REJECTED"
+  createdAt   DateTime @default(now())
+}
+
+model Dispute {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  reason      String
+  status      String   @default("OPEN") // "OPEN", "RESOLVED"
+  adminNotes  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TopupRequest {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  User         User     @relation(fields: [userId], references: [id])
+  amount       Float
+  receiptUrl   String
+  status       String   @default("pending") // "pending", "approved", "rejected"
+  adminComment String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Transaction {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Float
+  type        String   // "TOPUP", "COMMISSION", "PAYOUT", "REFUND"
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model SponsoredBanner {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?
+  imageUrl    String
+  targetUrl   String
+  cityId      Int?
+  city        City?     @relation(fields: [cityId], references: [id])
+  startDate   DateTime?
+  endDate     DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}

@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "my-telegram-bot-production-764d.up.railway.app"
+    },
+    {
+      "source": "/uploads/(.*)",
+      "destination": "my-telegram-bot-production-764d.up.railway.app"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
