@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .ticket-card {
+    @apply bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_8px_rgba(15,23,42,0.04)] hover:border-slate-300 transition-all;
+  }
+
+  .amount {
+    @apply font-bold font-display tracking-tight text-cash-dark;
+  }
+
+  .input {
+    @apply w-full bg-slate-50 border border-line rounded-xl px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-cash/40 focus:bg-white focus:border-cash transition-all;
+  }
+}
+
+/* Custom scrollbars for category list */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  background-color: #f8fafc;
+}

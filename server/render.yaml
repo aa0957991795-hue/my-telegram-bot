@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: telegram-gig-marketplace-api
+    env: node
+    plan: free
+    buildCommand: "cd server && npm install && npx prisma generate"
+    startCommand: "cd server && npx prisma db push && node src/server.js"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADS_ENABLED
+        value: false
