@@ -11,15 +11,15 @@ export default function Header() {
   const currentCityName = user?.city?.name || 'Всі міста';
 
   return (
-    <header className="sticky top-0 bg-white/90 backdrop-blur-md border-b border-line px-4 py-3 z-30 flex items-center justify-between shadow-[0_1px_4px_rgba(0,0,0,0.02)]">
+    <header className="sticky top-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-4 py-2.5 z-30 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-2">
         <button
           onClick={() => setShowCityModal(true)}
-          className="flex items-center gap-1 text-xs font-semibold text-ink bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-full transition-colors"
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3 py-1.5 rounded-full transition-colors"
         >
           <span>📍</span>
           <span>{currentCityName}</span>
-          <span className="text-[10px] text-ink/40">▼</span>
+          <span className="text-[10px] text-slate-400">▼</span>
         </button>
       </div>
 
@@ -27,7 +27,7 @@ export default function Header() {
         {user && (
           <button
             onClick={() => navigate('/profile')}
-            className="flex items-center gap-1.5 bg-cash/10 hover:bg-cash/20 px-3 py-1 rounded-full text-xs font-bold text-cash-dark transition-all"
+            className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200/60 dark:border-emerald-800/60 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-700 dark:text-emerald-400 transition-all"
           >
             <span>💰</span>
             <span>{Number(user.balance || 0).toFixed(0)} ₴</span>
@@ -39,7 +39,7 @@ export default function Header() {
           <button
             onClick={() => setShowDevModal(true)}
             title="Змінити тестового користувача"
-            className="bg-slate-100 hover:bg-slate-200 text-[11px] font-medium text-ink/70 px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1"
+            className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1"
           >
             <span>👤</span>
             <span className="truncate max-w-[70px]">{user?.firstName || 'Користувач'}</span>
@@ -49,13 +49,13 @@ export default function Header() {
 
       {/* City Modal */}
       {showCityModal && (
-        <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-5 animate-in slide-in-from-bottom duration-200">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-5 border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-base">Оберіть ваше місто</h3>
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">Оберіть ваше місто</h3>
               <button
                 onClick={() => setShowCityModal(false)}
-                className="text-ink/40 hover:text-ink text-sm p-1"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm p-1"
               >
                 ✕
               </button>
@@ -70,8 +70,8 @@ export default function Header() {
                   }}
                   className={`text-left px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                     user?.cityId === city.id
-                      ? 'bg-cash/10 text-cash-dark font-bold border border-cash/30'
-                      : 'bg-slate-50 hover:bg-slate-100 text-ink'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-300 dark:border-emerald-800'
+                      : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
                   }`}
                 >
                   📍 {city.name}
@@ -84,16 +84,16 @@ export default function Header() {
 
       {/* Dev User Switcher Modal */}
       {isDevModeEnabled && showDevModal && (
-        <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-5 animate-in slide-in-from-bottom duration-200">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-5 border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="font-bold text-base">Режим тестування (Dev)</h3>
-                <p className="text-xs text-ink/50">Швидке перемикання ролей</p>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">Режим тестування (Dev)</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Швидке перемикання ролей</p>
               </div>
               <button
                 onClick={() => setShowDevModal(false)}
-                className="text-ink/40 hover:text-ink text-sm p-1"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm p-1"
               >
                 ✕
               </button>
@@ -108,8 +108,8 @@ export default function Header() {
                   }}
                   className={`text-left px-4 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between ${
                     user?.id === u.id
-                      ? 'bg-ink text-white font-semibold'
-                      : 'bg-slate-50 hover:bg-slate-100 text-ink'
+                      ? 'bg-slate-900 dark:bg-emerald-600 text-white font-semibold'
+                      : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
                   }`}
                 >
                   <div>

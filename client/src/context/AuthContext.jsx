@@ -8,18 +8,48 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [devUsers, setDevUsers] = useState([]);
   const [cities, setCities] = useState([]);
+  const [tgUser, setTgUser] = useState(null);
+  const [colorScheme, setColorScheme] = useState('light');
 
   // Check if DEV switcher should be displayed:
   // Visible in development mode unless explicitly disabled via VITE_ENABLE_DEV_SWITCHER=false
   const isDevModeEnabled =
     import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_SWITCHER !== 'false';
 
-  // Initialize Telegram WebApp SDK if available
+  // Initialize Telegram WebApp SDK and Theme
   useEffect(() => {
     if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+      const tg = window.Telegram.WebApp;
       try {
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
+        tg.ready();
+        tg.expand();
+
+        if (tg.initDataUnsafe?.user) {
+          setTgUser(tg.initDataUnsafe.user);
+        }
+
+        if (tg.colorScheme) {
+          setColorScheme(tg.colorScheme);
+          if (tg.colorScheme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        }
+
+        const handleThemeChange = () => {
+          setColorScheme(tg.colorScheme || 'light');
+          if (tg.colorScheme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        };
+
+        tg.onEvent('themeChanged', handleThemeChange);
+        return () => {
+          tg.offEvent('themeChanged', handleThemeChange);
+        };
       } catch (e) {
         console.warn('Telegram WebApp ініціалізацію пропущено:', e);
       }
@@ -85,6 +115,8 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         user,
+        tgUser,
+        colorScheme,
         loading,
         devUsers,
         cities,

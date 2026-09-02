@@ -2,21 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --tg-bg: var(--tg-theme-bg-color, #f8fafc);
+  --tg-text: var(--tg-theme-text-color, #0f172a);
+  --tg-hint: var(--tg-theme-hint-color, #64748b);
+  --tg-btn: var(--tg-theme-button-color, #10b981);
+  --tg-btn-text: var(--tg-theme-button-text-color, #ffffff);
+  --tg-sec-bg: var(--tg-theme-secondary-bg-color, #ffffff);
+}
+
+.dark {
+  --tg-bg: var(--tg-theme-bg-color, #0f172a);
+  --tg-text: var(--tg-theme-text-color, #f8fafc);
+  --tg-hint: var(--tg-theme-hint-color, #94a3b8);
+  --tg-sec-bg: var(--tg-theme-secondary-bg-color, #1e293b);
+}
+
 @layer components {
   .ticket-card {
-    @apply bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_8px_rgba(15,23,42,0.04)] hover:border-slate-300 transition-all;
+    @apply bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-[0_2px_8px_rgba(15,23,42,0.04)] hover:border-slate-300 dark:hover:border-slate-700 transition-all;
   }
 
   .amount {
-    @apply font-bold font-display tracking-tight text-cash-dark;
+    @apply font-bold font-display tracking-tight text-cash-dark dark:text-emerald-400;
   }
 
   .input {
-    @apply w-full bg-slate-50 border border-line rounded-xl px-3.5 py-2.5 text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:ring-2 focus:ring-cash/40 focus:bg-white focus:border-cash transition-all;
+    @apply w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cash/40 focus:bg-white dark:focus:bg-slate-800 focus:border-cash transition-all;
   }
 }
 
-/* Custom scrollbars for category list */
+/* Custom scrollbars */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -28,5 +44,7 @@
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   min-height: 100vh;
-  background-color: #f8fafc;
+  background-color: var(--tg-bg);
+  color: var(--tg-text);
+  -webkit-font-smoothing: antialiased;
 }
