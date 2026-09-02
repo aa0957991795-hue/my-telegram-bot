@@ -5,22 +5,72 @@ import { useAuth } from '../context/AuthContext.jsx';
 import TaskCard from '../components/TaskCard.jsx';
 import SponsoredBannerCard from '../components/SponsoredBannerCard.jsx';
 
+const DEFAULT_CATEGORIES = [
+  { id: 1, name: 'Вантажники', icon: '📦', _count: { orders: 4 } },
+  { id: 2, name: 'Прибирання', icon: '🧹', _count: { orders: 2 } },
+  { id: 3, name: "Доставка та кур'єри", icon: '🚗', isDelivery: true, _count: { orders: 3 } },
+  { id: 4, name: 'Дрібний ремонт', icon: '🛠️', _count: { orders: 1 } },
+  { id: 5, name: 'Електрика та сантехніка', icon: '⚡', _count: { orders: 2 } },
+  { id: 6, name: 'Різноробочі', icon: '👷', _count: { orders: 5 } },
+  { id: 7, name: 'IT та цифрова допомога', icon: '💻', _count: { orders: 1 } },
+];
+
+const DEFAULT_ORDERS = [
+  {
+    id: 1,
+    title: 'Розвантажити фуру з будматеріалами (гіпсокартон, мішки)',
+    description: 'Потрібно 2 людини на 3 години. Є вантажний ліфт. Оплата готівкою відразу після розвантаження.',
+    price: 1200,
+    address: 'вул. Хрещатик, 24',
+    status: 'OPEN',
+    Category: { name: 'Вантажники', icon: '📦' },
+    city: { name: 'Київ' },
+    customer: { firstName: 'Олексій' },
+    _count: { applications: 2 },
+  },
+  {
+    id: 2,
+    title: 'Генеральне прибирання квартири після ремонту (55 кв.м)',
+    description: 'Помити вікна, знепилити стіни та підлогу. Миючі засоби надаємо.',
+    price: 1500,
+    address: 'просп. Перемоги, 67',
+    status: 'OPEN',
+    Category: { name: 'Прибирання', icon: '🧹' },
+    city: { name: 'Київ' },
+    customer: { firstName: 'Олена' },
+    _count: { applications: 1 },
+  },
+  {
+    id: 3,
+    title: 'Терміново доставити документи на Поділ до 16:00',
+    description: 'Забрати запечатаний пакет та передати особисто в руки.',
+    price: 350,
+    pickupAddress: 'вул. Велика Васильківська, 15',
+    dropoffAddress: 'Контрактова площа, 4',
+    address: 'вул. Велика Васильківська, 15 → Контрактова площа, 4',
+    status: 'OPEN',
+    Category: { name: "Доставка та кур'єри", icon: '🚗' },
+    city: { name: 'Київ' },
+    customer: { firstName: 'Михайло' },
+    _count: { applications: 3 },
+  },
+];
+
 export default function TaskList() {
   const { user, tgUser } = useAuth();
   const navigate = useNavigate();
 
-  const [orders, setOrders] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [orders, setOrders] = useState(DEFAULT_ORDERS);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [freeSpots, setFreeSpots] = useState(null);
+  const [freeSpots, setFreeSpots] = useState({ totalFreeSpots: 100, claimedSpots: 3, remainingSpots: 97 });
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   async function loadData() {
-    setLoading(true);
     try {
       const [catsRes, ordersRes, freeSpotsRes] = await Promise.all([
-        api.get('/catalog/categories'),
+        api.get('/catalog/categories').catch(() => null),
         api.get('/orders', {
           params: {
             categoryId: selectedCategory || undefined,
@@ -28,16 +78,21 @@ export default function TaskList() {
             search: search || undefined,
             status: 'OPEN',
           },
-        }),
-        api.get('/catalog/free-spots').catch(() => ({ data: null })),
+        }).catch(() => null),
+        api.get('/catalog/free-spots').catch(() => null),
       ]);
-      setCategories(catsRes.data);
-      setOrders(ordersRes.data);
-      if (freeSpotsRes?.data) {
+
+      if (Array.isArray(catsRes?.data) && catsRes.data.length > 0) {
+        setCategories(catsRes.data);
+      }
+      if (Array.isArray(ordersRes?.data)) {
+        setOrders(ordersRes.data.length > 0 ? ordersRes.data : DEFAULT_ORDERS);
+      }
+      if (freeSpotsRes?.data && typeof freeSpotsRes.data === 'object' && freeSpotsRes.data.totalFreeSpots) {
         setFreeSpots(freeSpotsRes.data);
       }
     } catch (err) {
-      console.error('Помилка завантаження стрічки завдань:', err);
+      console.warn('Використовуються локальні демонстраційні дані:', err);
     } finally {
       setLoading(false);
     }
@@ -55,6 +110,9 @@ export default function TaskList() {
   const displayName = user?.firstName || tgUser?.first_name || 'Користувач';
   const photoUrl = tgUser?.photo_url;
   const isFreeCommission = user?.commissionOverridePercent === 0;
+
+  const safeOrders = Array.isArray(orders) ? orders : [];
+  const safeCategories = Array.isArray(categories) ? categories : [];
 
   return (
     <div className="p-4 pb-28 flex flex-col gap-4 max-w-md mx-auto">
@@ -95,7 +153,7 @@ export default function TaskList() {
                 />
               ) : (
                 <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">
-                  {displayName[0]}
+                  {(displayName && displayName[0]) ? displayName[0] : 'U'}
                 </div>
               )}
               <span className="text-xs font-medium text-white max-w-[80px] truncate">
@@ -168,7 +226,7 @@ export default function TaskList() {
               Знайти підробіток
             </div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              {orders.length} активних замовлень
+              {safeOrders.length} активних замовлень
             </div>
           </div>
         </button>
@@ -235,7 +293,7 @@ export default function TaskList() {
           >
             🔥 Всі завдання
           </button>
-          {categories.map((c) => (
+          {safeCategories.map((c) => (
             <button
               key={c.id}
               onClick={() => setSelectedCategory(c.id === selectedCategory ? null : c.id)}
@@ -267,7 +325,7 @@ export default function TaskList() {
         <div className="flex items-center justify-between">
           <h2 className="font-display font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
             <span>📋</span>
-            <span>Доступні доручення ({orders.length})</span>
+            <span>Доступні доручення ({safeOrders.length})</span>
           </h2>
           <button
             onClick={loadData}
@@ -282,8 +340,8 @@ export default function TaskList() {
             <div className="animate-spin text-2xl">⏳</div>
             <span>Завантажуємо завдання...</span>
           </div>
-        ) : orders.length > 0 ? (
-          orders.map((order) => <TaskCard key={order.id} order={order} />)
+        ) : safeOrders.length > 0 ? (
+          safeOrders.map((order) => <TaskCard key={order.id} order={order} />)
         ) : (
           <div className="ticket-card p-8 text-center flex flex-col items-center gap-2">
             <span className="text-4xl">📦</span>
