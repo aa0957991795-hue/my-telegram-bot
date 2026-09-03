@@ -96,6 +96,22 @@ export default function TaskList() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
 
+  function getMergedOrders(serverOrders = []) {
+    try {
+      const customCreated = JSON.parse(localStorage.getItem('custom_created_orders') || '[]');
+      const combined = [...customCreated, ...(serverOrders.length > 0 ? serverOrders : DEFAULT_ORDERS)];
+      // Unique by id
+      const seen = new Set();
+      return combined.filter((item) => {
+        if (!item || !item.id || seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+    } catch {
+      return serverOrders.length > 0 ? serverOrders : DEFAULT_ORDERS;
+    }
+  }
+
   async function loadData() {
     try {
       const [catsRes, ordersRes, freeSpotsRes] = await Promise.all([
@@ -114,14 +130,15 @@ export default function TaskList() {
       if (Array.isArray(catsRes?.data) && catsRes.data.length > 0) {
         setCategories(catsRes.data);
       }
-      if (Array.isArray(ordersRes?.data) && ordersRes.data.length > 0) {
-        setOrders(ordersRes.data);
-      }
+      const apiOrders = Array.isArray(ordersRes?.data) ? ordersRes.data : [];
+      setOrders(getMergedOrders(apiOrders));
+
       if (freeSpotsRes?.data && typeof freeSpotsRes.data === 'object' && freeSpotsRes.data.totalFreeSpots) {
         setFreeSpots(freeSpotsRes.data);
       }
     } catch (err) {
       console.warn('Використовуються локальні демонстраційні дані:', err);
+      setOrders(getMergedOrders([]));
     } finally {
       setLoading(false);
     }
@@ -136,7 +153,6 @@ export default function TaskList() {
       setSelectedCategory(null);
     } else {
       setSelectedCategory(catId);
-      // Scroll smoothly to task feed section
       setTimeout(() => {
         const feedElem = document.getElementById('task-feed-section');
         if (feedElem) feedElem.scrollIntoView({ behavior: 'smooth' });

@@ -12,6 +12,21 @@ export default function MyOrders() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  function getMergedCustomerOrders(serverOrders = []) {
+    try {
+      const customCreated = JSON.parse(localStorage.getItem('custom_created_orders') || '[]');
+      const combined = [...customCreated, ...serverOrders];
+      const seen = new Set();
+      return combined.filter((item) => {
+        if (!item || !item.id || seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+    } catch {
+      return serverOrders;
+    }
+  }
+
   async function loadMyOrders() {
     setLoading(true);
     try {
@@ -19,14 +34,15 @@ export default function MyOrders() {
         api.get('/orders/my/customer').catch(() => null),
         api.get('/orders/my/performer').catch(() => null),
       ]);
-      if (Array.isArray(custRes?.data)) {
-        setCustomerOrders(custRes.data);
-      }
+      const apiCust = Array.isArray(custRes?.data) ? custRes.data : [];
+      setCustomerOrders(getMergedCustomerOrders(apiCust));
+
       if (Array.isArray(perfRes?.data)) {
         setPerformerOrders(perfRes.data);
       }
     } catch (err) {
       console.warn('Помилка завантаження моїх замовлень:', err);
+      setCustomerOrders(getMergedCustomerOrders([]));
     } finally {
       setLoading(false);
     }

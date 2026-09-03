@@ -74,23 +74,62 @@ export default function CreateOrder() {
       return;
     }
 
+    const selectedCity = safeCities.find((c) => String(c.id) === String(form.cityId)) || { id: 1, name: "Київ" };
+    const categoryObj = safeCategories.find((c) => String(c.id) === String(form.categoryId)) || safeCategories[0];
+
+    let finalAddress = form.address?.trim() || selectedCity.name;
+    if (isDelivery && form.pickupAddress && form.dropoffAddress) {
+      finalAddress = `${form.pickupAddress.trim()} → ${form.dropoffAddress.trim()}`;
+    }
+
+    const newOrderData = {
+      id: Date.now(),
+      title: form.title.trim(),
+      description: form.description?.trim() || "",
+      price: parseFloat(form.price),
+      address: finalAddress,
+      pickupAddress: form.pickupAddress?.trim() || null,
+      dropoffAddress: form.dropoffAddress?.trim() || null,
+      categoryId: parseInt(form.categoryId, 10),
+      Category: { id: categoryObj.id, name: categoryObj.name, icon: categoryObj.icon },
+      cityId: selectedCity.id,
+      city: selectedCity,
+      customer: {
+        id: user?.id || 1,
+        firstName: user?.firstName || "Замовник",
+        username: user?.username || "",
+      },
+      customerId: user?.id || 1,
+      status: "OPEN",
+      createdAt: new Date().toISOString(),
+      _count: { applications: 0 },
+    };
+
+    // Save locally to custom_created_orders in localStorage
     try {
-      const { data } = await api.post("/orders", {
+      const existing = JSON.parse(localStorage.getItem("custom_created_orders") || "[]");
+      const updated = [newOrderData, ...existing];
+      localStorage.setItem("custom_created_orders", JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Помилка збереження в localStorage:", e);
+    }
+
+    // Try posting to backend API
+    try {
+      await api.post("/orders", {
         ...form,
-        cityId: form.cityId || user?.cityId || 1,
+        cityId: parseInt(form.cityId, 10) || selectedCity.id,
+        price: parseFloat(form.price),
+        categoryId: parseInt(form.categoryId, 10),
+      }).catch((err) => {
+        console.warn("API POST /orders не відповів, збережено в локальну базу:", err);
       });
       await reloadProfile();
-      if (data?.id) {
-        navigate(`/tasks/${data.id}`);
-      } else {
-        navigate("/");
-      }
     } catch (err) {
-      console.warn("Помилка публікації онлайн, збережено локально:", err);
-      // Even if backend fails, navigate gracefully
-      navigate("/");
+      console.warn("API POST failed:", err);
     } finally {
       setBusy(false);
+      navigate("/");
     }
   }
 

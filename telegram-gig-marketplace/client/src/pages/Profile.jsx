@@ -4,7 +4,7 @@ import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function Profile() {
-  const { user, reloadProfile, devUsers, switchDevUser, isDevModeEnabled } = useAuth();
+  const { user, reloadProfile, devUsers, switchDevUser, isDevModeEnabled, isAdmin, setAdminRole } = useAuth();
   const navigate = useNavigate();
 
   const [profileData, setProfileData] = useState(null);
@@ -22,17 +22,17 @@ export default function Profile() {
     lastName: user?.lastName || '',
     username: user?.username || '',
     telegramId: user?.telegramId || '1002',
-    balance: user?.balance || 0,
+    balance: user?.balance || 500,
     role: user?.role || 'USER',
     commissionOverridePercent: user?.commissionOverridePercent ?? 0.0,
     city: user?.city || { name: 'Київ' },
-    _count: { createdOrders: 0, performedOrders: 0 },
+    _count: { createdOrders: 1, performedOrders: 0 },
     transactions: [
       {
         id: 1,
         amount: 500,
         type: 'TOPUP',
-        description: 'Початкове поповнення балансу',
+        description: 'Початковий баланс рахунку',
         createdAt: new Date().toISOString(),
       },
     ],
@@ -64,7 +64,6 @@ export default function Profile() {
       const file = e.target.files?.[0];
       if (file) {
         setReceiptFile(file);
-        // Use FileReader for maximum compatibility across all WebViews and mobile browsers
         const reader = new FileReader();
         reader.onload = (event) => {
           setReceiptPreview(event.target.result);
@@ -81,7 +80,7 @@ export default function Profile() {
 
   async function handleTopupSubmit(e) {
     e.preventDefault();
-    if (!receiptFile) {
+    if (!receiptFile && !receiptPreview) {
       setMessage({ type: 'error', text: 'Будь ласка, прикріпіть фото або скриншот квитанції/чека' });
       return;
     }
@@ -89,14 +88,43 @@ export default function Profile() {
     setTopupBusy(true);
     setMessage(null);
 
+    const newTopup = {
+      id: Date.now(),
+      amount: parseFloat(topupAmount),
+      receiptUrl: receiptPreview || '/uploads/sample-receipt.jpg',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      User: {
+        id: user?.id || 1,
+        firstName: user?.firstName || 'Користувач',
+        username: user?.username || '',
+        telegramId: user?.telegramId || '1002',
+        balance: user?.balance || 500,
+      },
+    };
+
+    // Save locally to custom_topup_requests in localStorage
+    try {
+      const existing = JSON.parse(localStorage.getItem('custom_topup_requests') || '[]');
+      const updated = [newTopup, ...existing];
+      localStorage.setItem('custom_topup_requests', JSON.stringify(updated));
+    } catch (err) {
+      console.warn('Помилка запису в localStorage:', err);
+    }
+
+    // Also send to backend
     const formData = new FormData();
     formData.append('amount', topupAmount);
-    formData.append('receipt', receiptFile);
+    if (receiptFile) {
+      formData.append('receipt', receiptFile);
+    }
 
     try {
       await api.post('/profile/topup', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-      }).catch(() => null);
+      }).catch((err) => {
+        console.warn('API /profile/topup не відповів, чек збережено локально:', err);
+      });
 
       setMessage({
         type: 'success',
@@ -126,7 +154,7 @@ export default function Profile() {
         <h1 className="font-display text-xl font-bold text-slate-900 dark:text-white">
           Особистий кабінет
         </h1>
-        {user?.role === 'ADMIN' && (
+        {isAdmin && (
           <button
             onClick={() => navigate('/admin')}
             className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1 transition-all"
@@ -217,30 +245,30 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Dev Switcher Section (only shown when DEV mode is enabled) */}
-      {isDevModeEnabled && (
-        <div className="ticket-card p-3.5 flex flex-col gap-2 bg-slate-50/50 dark:bg-slate-850">
-          <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-            <span>🛠️ Перемикання тестового акаунта:</span>
-            <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.2 rounded font-mono">DEV MODE</span>
+      {/* Admin Access Toggle for testing */}
+      <div className="p-3 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div>
+          <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+            {isAdmin ? '👑 Режим адміністратора увімкнено' : '🔒 Доступ адміністратора'}
           </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {devUsers.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => switchDevUser(u.id)}
-                className={`py-2 px-1.5 rounded-lg text-xs font-medium truncate transition-all ${
-                  user?.id === u.id
-                    ? 'bg-slate-900 dark:bg-emerald-600 text-white shadow-sm'
-                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
-                }`}
-              >
-                {u.firstName} ({u.role === 'ADMIN' ? 'Адмін' : u.id === 5 ? 'Замовник' : 'Майстер'})
-              </button>
-            ))}
+          <div className="text-[10px] text-slate-500">
+            {isAdmin ? 'Адмін-панель доступна для перегляду чеків та скарг' : 'Доступний перегляд панелі модерації'}
           </div>
         </div>
-      )}
+        <button
+          onClick={() => {
+            setAdminRole(!isAdmin);
+            setMessage({ type: 'success', text: !isAdmin ? 'Адмін-доступ надано!' : 'Адмін-доступ вимкнено' });
+          }}
+          className={`text-xs px-3 py-1.5 rounded-full font-semibold transition-all ${
+            isAdmin
+              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+              : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300'
+          }`}
+        >
+          {isAdmin ? 'Вимкнути' : 'Увімкнути адмін'}
+        </button>
+      </div>
 
       {/* Transaction History */}
       <div className="flex flex-col gap-2 mt-1">

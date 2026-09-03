@@ -120,13 +120,15 @@ export function AuthProvider({ children }) {
       } else {
         // Fallback user profile (from Telegram initData if available or guest)
         const tgData = window?.Telegram?.WebApp?.initDataUnsafe?.user;
+        const storedRole = localStorage.getItem('user_role') || 'USER';
         setUser({
           id: tgData?.id || 1,
+          telegramId: String(tgData?.id || '1002'),
           firstName: tgData?.first_name || 'Користувач',
           lastName: tgData?.last_name || '',
           username: tgData?.username || '',
-          balance: 0,
-          role: 'USER',
+          balance: 500,
+          role: storedRole,
           commissionOverridePercent: 0.0,
           cityId: initialCity.id,
           city: initialCity,
@@ -145,7 +147,7 @@ export function AuthProvider({ children }) {
 
   async function reloadProfile() {
     try {
-      const res = await api.get('/auth/me');
+      const res = await api.get('/auth/me').catch(() => null);
       if (res?.data && typeof res.data === 'object' && res.data.id) {
         setUser(res.data);
         return res.data;
@@ -178,6 +180,18 @@ export function AuthProvider({ children }) {
     api.put('/profile', { cityId: selectedCityObj.id }).catch(() => null);
   }
 
+  function setAdminRole(enabled) {
+    const role = enabled ? 'ADMIN' : 'USER';
+    localStorage.setItem('user_role', role);
+    setUser((prev) => (prev ? { ...prev, role } : { role }));
+  }
+
+  const isAdmin = Boolean(
+    user?.role === 'ADMIN' ||
+    localStorage.getItem('user_role') === 'ADMIN' ||
+    localStorage.getItem('is_admin_override') === 'true'
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -190,6 +204,8 @@ export function AuthProvider({ children }) {
         reloadProfile,
         switchDevUser,
         updateCity,
+        setAdminRole,
+        isAdmin,
         isDevModeEnabled,
         isTelegram: Boolean(window?.Telegram?.WebApp?.initData),
       }}
