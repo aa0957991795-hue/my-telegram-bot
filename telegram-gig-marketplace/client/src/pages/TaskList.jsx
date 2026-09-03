@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -6,12 +6,12 @@ import TaskCard from '../components/TaskCard.jsx';
 import SponsoredBannerCard from '../components/SponsoredBannerCard.jsx';
 
 const DEFAULT_CATEGORIES = [
-  { id: 1, name: 'Вантажники', icon: '📦', _count: { orders: 4 } },
+  { id: 1, name: 'Вантажники', icon: '📦', _count: { orders: 3 } },
   { id: 2, name: 'Прибирання', icon: '🧹', _count: { orders: 2 } },
-  { id: 3, name: "Доставка та кур'єри", icon: '🚗', isDelivery: true, _count: { orders: 3 } },
+  { id: 3, name: "Доставка та кур'єри", icon: '🚗', isDelivery: true, _count: { orders: 2 } },
   { id: 4, name: 'Дрібний ремонт', icon: '🛠️', _count: { orders: 1 } },
   { id: 5, name: 'Електрика та сантехніка', icon: '⚡', _count: { orders: 2 } },
-  { id: 6, name: 'Різноробочі', icon: '👷', _count: { orders: 5 } },
+  { id: 6, name: 'Різноробочі', icon: '👷', _count: { orders: 4 } },
   { id: 7, name: 'IT та цифрова допомога', icon: '💻', _count: { orders: 1 } },
 ];
 
@@ -23,8 +23,9 @@ const DEFAULT_ORDERS = [
     price: 1200,
     address: 'вул. Хрещатик, 24',
     status: 'OPEN',
-    Category: { name: 'Вантажники', icon: '📦' },
-    city: { name: 'Київ' },
+    categoryId: 1,
+    Category: { id: 1, name: 'Вантажники', icon: '📦' },
+    city: { id: 1, name: 'Київ' },
     customer: { firstName: 'Олексій' },
     _count: { applications: 2 },
   },
@@ -35,24 +36,52 @@ const DEFAULT_ORDERS = [
     price: 1500,
     address: 'просп. Перемоги, 67',
     status: 'OPEN',
-    Category: { name: 'Прибирання', icon: '🧹' },
-    city: { name: 'Київ' },
+    categoryId: 2,
+    Category: { id: 2, name: 'Прибирання', icon: '🧹' },
+    city: { id: 1, name: 'Київ' },
     customer: { firstName: 'Олена' },
     _count: { applications: 1 },
   },
   {
     id: 3,
     title: 'Терміново доставити документи на Поділ до 16:00',
-    description: 'Забрати запечатаний пакет та передати особисто в руки.',
+    description: 'Забрати запечатаний пакет та передати особисто в руки. Оплата готівкою при отриманні.',
     price: 350,
     pickupAddress: 'вул. Велика Васильківська, 15',
     dropoffAddress: 'Контрактова площа, 4',
     address: 'вул. Велика Васильківська, 15 → Контрактова площа, 4',
     status: 'OPEN',
-    Category: { name: "Доставка та кур'єри", icon: '🚗' },
-    city: { name: 'Київ' },
+    categoryId: 3,
+    Category: { id: 3, name: "Доставка та кур'єри", icon: '🚗' },
+    city: { id: 1, name: 'Київ' },
     customer: { firstName: 'Михайло' },
     _count: { applications: 3 },
+  },
+  {
+    id: 4,
+    title: 'Заміна змішувача та підключення пральної машини',
+    description: 'Потрібен майстер зі своїм інструментом. Робота на 1-1.5 години.',
+    price: 800,
+    address: 'вул. Саксаганського, 12',
+    status: 'OPEN',
+    categoryId: 5,
+    Category: { id: 5, name: 'Електрика та сантехніка', icon: '⚡' },
+    city: { id: 1, name: 'Київ' },
+    customer: { firstName: 'Андрій' },
+    _count: { applications: 1 },
+  },
+  {
+    id: 5,
+    title: 'Допомога на складі з переміщенням коробок (4 години)',
+    description: 'Потрібні різноробочі на зміну. Розрахунок готівкою в кінці дня.',
+    price: 900,
+    address: 'вул. Куренівська, 18',
+    status: 'OPEN',
+    categoryId: 6,
+    Category: { id: 6, name: 'Різноробочі', icon: '👷' },
+    city: { id: 1, name: 'Київ' },
+    customer: { firstName: 'Віталій' },
+    _count: { applications: 4 },
   },
 ];
 
@@ -85,8 +114,8 @@ export default function TaskList() {
       if (Array.isArray(catsRes?.data) && catsRes.data.length > 0) {
         setCategories(catsRes.data);
       }
-      if (Array.isArray(ordersRes?.data)) {
-        setOrders(ordersRes.data.length > 0 ? ordersRes.data : DEFAULT_ORDERS);
+      if (Array.isArray(ordersRes?.data) && ordersRes.data.length > 0) {
+        setOrders(ordersRes.data);
       }
       if (freeSpotsRes?.data && typeof freeSpotsRes.data === 'object' && freeSpotsRes.data.totalFreeSpots) {
         setFreeSpots(freeSpotsRes.data);
@@ -102,6 +131,19 @@ export default function TaskList() {
     loadData();
   }, [selectedCategory, user?.cityId]);
 
+  const handleCategoryClick = (catId) => {
+    if (selectedCategory === catId) {
+      setSelectedCategory(null);
+    } else {
+      setSelectedCategory(catId);
+      // Scroll smoothly to task feed section
+      setTimeout(() => {
+        const feedElem = document.getElementById('task-feed-section');
+        if (feedElem) feedElem.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    }
+  };
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     loadData();
@@ -111,8 +153,31 @@ export default function TaskList() {
   const photoUrl = tgUser?.photo_url;
   const isFreeCommission = user?.commissionOverridePercent === 0;
 
-  const safeOrders = Array.isArray(orders) ? orders : [];
-  const safeCategories = Array.isArray(categories) ? categories : [];
+  const safeCategories = Array.isArray(categories) ? categories : DEFAULT_CATEGORIES;
+  const safeOrders = Array.isArray(orders) ? orders : DEFAULT_ORDERS;
+
+  // Filter orders in memory by category & search query
+  const filteredOrders = useMemo(() => {
+    return safeOrders.filter((order) => {
+      // 1. Category match
+      if (selectedCategory !== null) {
+        const matchCatId = order.categoryId === selectedCategory || order.Category?.id === selectedCategory;
+        const matchCatName = safeCategories.find((c) => c.id === selectedCategory)?.name === order.Category?.name;
+        if (!matchCatId && !matchCatName) return false;
+      }
+      // 2. Search query match
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchTitle = order.title?.toLowerCase().includes(q);
+        const matchDesc = order.description?.toLowerCase().includes(q);
+        const matchAddr = order.address?.toLowerCase().includes(q);
+        if (!matchTitle && !matchDesc && !matchAddr) return false;
+      }
+      return true;
+    });
+  }, [safeOrders, selectedCategory, search, safeCategories]);
+
+  const activeCategoryObj = safeCategories.find((c) => c.id === selectedCategory);
 
   return (
     <div className="p-4 pb-28 flex flex-col gap-4 max-w-md mx-auto">
@@ -143,7 +208,7 @@ export default function TaskList() {
             {/* Telegram User Auto Badge */}
             <div
               onClick={() => navigate('/profile')}
-              className="flex items-center gap-2 bg-white/10 hover:bg-white/15 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-white/10 cursor-pointer transition-all"
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/15 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-white/10 cursor-pointer transition-all active:scale-95"
             >
               {photoUrl ? (
                 <img
@@ -195,7 +260,7 @@ export default function TaskList() {
         {/* Button A: Create Task */}
         <button
           onClick={() => navigate('/create')}
-          className="group ticket-card p-4 flex flex-col justify-between items-start text-left bg-gradient-to-br from-emerald-50 to-teal-50/60 dark:from-emerald-950/30 dark:to-slate-900 border-emerald-200/80 dark:border-emerald-800/50 hover:shadow-md active:scale-98 transition-all"
+          className="group ticket-card p-4 flex flex-col justify-between items-start text-left bg-gradient-to-br from-emerald-50 to-teal-50/60 dark:from-emerald-950/30 dark:to-slate-900 border-emerald-200/80 dark:border-emerald-800/50 hover:shadow-md active:scale-98 transition-all cursor-pointer"
         >
           <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-xl shadow-md shadow-emerald-500/30 group-hover:scale-105 transition-transform">
             ➕
@@ -216,7 +281,7 @@ export default function TaskList() {
             const feedElem = document.getElementById('task-feed-section');
             if (feedElem) feedElem.scrollIntoView({ behavior: 'smooth' });
           }}
-          className="group ticket-card p-4 flex flex-col justify-between items-start text-left bg-gradient-to-br from-blue-50 to-indigo-50/60 dark:from-blue-950/30 dark:to-slate-900 border-blue-200/80 dark:border-blue-800/50 hover:shadow-md active:scale-98 transition-all"
+          className="group ticket-card p-4 flex flex-col justify-between items-start text-left bg-gradient-to-br from-blue-50 to-indigo-50/60 dark:from-blue-950/30 dark:to-slate-900 border-blue-200/80 dark:border-blue-800/50 hover:shadow-md active:scale-98 transition-all cursor-pointer"
         >
           <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl shadow-md shadow-blue-600/30 group-hover:scale-105 transition-transform">
             💼
@@ -226,7 +291,7 @@ export default function TaskList() {
               Знайти підробіток
             </div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              {safeOrders.length} активних замовлень
+              {filteredOrders.length} доступних завдань
             </div>
           </div>
         </button>
@@ -280,40 +345,62 @@ export default function TaskList() {
         )}
       </form>
 
-      {/* 5. Horizontal Category Filter Pills */}
-      <div>
+      {/* 5. Interactive Categories (Horizontal scroll with active indicator) */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            Категорії робіт:
+          </span>
+          {selectedCategory && (
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+            >
+              ✕ Скинути фільтр
+            </button>
+          )}
+        </div>
+
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
           <button
+            type="button"
             onClick={() => setSelectedCategory(null)}
-            className={`whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`whitespace-nowrap px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95 ${
               selectedCategory === null
-                ? 'bg-slate-900 dark:bg-emerald-500 text-white shadow-sm'
-                : 'ticket-card text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-emerald-600 text-white shadow-emerald-500/20'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            🔥 Всі завдання
+            <span>🔥</span>
+            <span>Всі завдання</span>
+            <span className="text-[10px] opacity-75">({safeOrders.length})</span>
           </button>
-          {safeCategories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedCategory(c.id === selectedCategory ? null : c.id)}
-              className={`whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                selectedCategory === c.id
-                  ? 'bg-slate-900 dark:bg-emerald-500 text-white shadow-sm'
-                  : 'ticket-card text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            >
-              <span>{c.icon}</span>
-              <span>{c.name}</span>
-              {c._count?.orders > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                  selectedCategory === c.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}>
-                  {c._count.orders}
-                </span>
-              )}
-            </button>
-          ))}
+
+          {safeCategories.map((c) => {
+            const isSelected = selectedCategory === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => handleCategoryClick(c.id)}
+                className={`whitespace-nowrap px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                  isSelected
+                    ? 'bg-emerald-600 text-white shadow-emerald-500/30 ring-2 ring-emerald-500/50'
+                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span className="text-base">{c.icon}</span>
+                <span>{c.name}</span>
+                {c._count?.orders > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    isSelected ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}>
+                    {c._count.orders}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -325,14 +412,27 @@ export default function TaskList() {
         <div className="flex items-center justify-between">
           <h2 className="font-display font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
             <span>📋</span>
-            <span>Доступні доручення ({safeOrders.length})</span>
+            <span>
+              {activeCategoryObj
+                ? `${activeCategoryObj.icon} ${activeCategoryObj.name} (${filteredOrders.length})`
+                : `Доступні доручення (${filteredOrders.length})`}
+            </span>
           </h2>
-          <button
-            onClick={loadData}
-            className="text-xs text-cash-dark dark:text-emerald-400 hover:underline font-medium"
-          >
-            Оновити
-          </button>
+          {selectedCategory ? (
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
+            >
+              Показати всі
+            </button>
+          ) : (
+            <button
+              onClick={loadData}
+              className="text-xs text-cash-dark dark:text-emerald-400 hover:underline font-medium"
+            >
+              Оновити
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -340,23 +440,31 @@ export default function TaskList() {
             <div className="animate-spin text-2xl">⏳</div>
             <span>Завантажуємо завдання...</span>
           </div>
-        ) : safeOrders.length > 0 ? (
-          safeOrders.map((order) => <TaskCard key={order.id} order={order} />)
+        ) : filteredOrders.length > 0 ? (
+          filteredOrders.map((order) => <TaskCard key={order.id} order={order} />)
         ) : (
           <div className="ticket-card p-8 text-center flex flex-col items-center gap-2">
             <span className="text-4xl">📦</span>
             <div className="font-semibold text-sm text-slate-900 dark:text-white">
-              Поки немає активних завдань
+              Поки немає завдань у цій категорії
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs">
-              У вибраній категорії або місті поки немає заявок. Ви можете створити завдання першим!
+              Створіть завдання або оберіть іншу категорію робіт.
             </p>
-            <button
-              onClick={() => navigate('/create')}
-              className="mt-2 bg-cash hover:bg-cash-dark text-white text-xs font-semibold px-4 py-2 rounded-full shadow-sm"
-            >
-              + Створити перше завдання
-            </button>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold px-4 py-2 rounded-full"
+              >
+                Всі категорії
+              </button>
+              <button
+                onClick={() => navigate('/create')}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-sm"
+              >
+                + Створити завдання
+              </button>
+            </div>
           </div>
         )}
       </div>
