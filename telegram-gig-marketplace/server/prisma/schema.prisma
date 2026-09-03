@@ -28,6 +28,7 @@ model User {
   topups            TopupRequest[]
   transactions      Transaction[]
   disputes          Dispute[]
+  messages          SupportMessage[]
 }
 
 model City {
@@ -134,4 +135,20 @@ model SponsoredBanner {
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+model SupportMessage {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  senderRole  String   // "ADMIN" or "USER"
+  text        String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model AppSetting {
+  key         String   @id
+  value       String
+  updatedAt   DateTime @updatedAt
 }

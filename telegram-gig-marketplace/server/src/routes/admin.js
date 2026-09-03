@@ -1,7 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAdmin } from '../middleware/auth.js';
-import { sendTelegramNotification } from '../utils/telegramBot.js';
+import { sendTelegramNotification, notifyAdmin } from '../utils/telegramBot.js';
 import { upload } from '../middleware/upload.js';
 
 const router = express.Router();
@@ -118,7 +118,7 @@ router.post('/topups/:id/approve', async (req, res) => {
 
     // Notify user via Telegram
     if (topup.User?.telegramId) {
-      const msg = `💳 <b>Баланс успішно поповнено!</b>\n\nНараховано: <b>+${topup.amount} ₴</b>\nПоточний баланс: <b>${result.updatedUser.balance} ₴</b>`;
+      const msg = `💳 <b>Баланс успішно поповнено!</b>\n\nНараховано: <b>+${topup.amount} ₴</b>\nПоточний баланс: <b>${result.updatedUser.balance} ₴</b>\n\nДякуємо!`;
       sendTelegramNotification(topup.User.telegramId, msg).catch(console.error);
     }
 
@@ -154,7 +154,7 @@ router.post('/topups/:id/reject', async (req, res) => {
 
     // Notify user via Telegram
     if (topup.User?.telegramId) {
-      const msg = `❌ <b>Заявку на поповнення #${topup.id} відхилено</b>\n\nПричина: ${comment || 'Квитанція не пройшла перевірку'}\nЯкщо це помилка, зверніться до адміністратора.`;
+      const msg = `❌ <b>Заявку на поповнення #${topup.id} відхилено</b>\n\nПричина: ${comment || 'Квитанція не пройшла перевірку'}\nЯкщо це помилка, зверніться до адміністратора в чаті.`;
       sendTelegramNotification(topup.User.telegramId, msg).catch(console.error);
     }
 
@@ -204,7 +204,7 @@ router.post('/disputes/:id/resolve', async (req, res) => {
 
     // Notify complainant
     if (updated.user?.telegramId) {
-      const msg = `ℹ️ <b>Вашу скаргу на завдання #${updated.orderId} розглянуто!</b>\n\nРішення/Коментар: ${adminNotes || 'Вирішено адміністратором'}`;
+      const msg = `ℹ️ <b>Вашу скаргу на завдання #${updated.orderId} розглянуто!</b>\n\nРішення адміністратора: «${adminNotes || 'Питання врегульовано'}»\nДякуємо за звернення!`;
       sendTelegramNotification(updated.user.telegramId, msg).catch(console.error);
     }
 
@@ -212,6 +212,128 @@ router.post('/disputes/:id/resolve', async (req, res) => {
   } catch (error) {
     console.error('Error resolving dispute:', error);
     res.status(500).json({ error: 'Помилка закриття скарги' });
+  }
+});
+
+// Support / Direct Chat Messages with users
+router.get('/messages', async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        messages: { some: {} },
+      },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching message chats:', error);
+    res.status(500).json({ error: 'Помилка завантаження діалогів' });
+  }
+});
+
+router.get('/messages/:userId', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    const messages = await prisma.supportMessage.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(messages);
+  } catch (error) {
+    console.error('Error fetching chat history:', error);
+    res.status(500).json({ error: 'Помилка завантаження історії повідомлень' });
+  }
+});
+
+// Send message from Admin to User in Telegram
+router.post('/messages/send', async (req, res) => {
+  try {
+    const { userId, telegramId, text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Введіть текст повідомлення' });
+    }
+
+    let targetUser = null;
+    if (userId) {
+      targetUser = await prisma.user.findUnique({ where: { id: parseInt(userId, 10) } });
+    } else if (telegramId) {
+      targetUser = await prisma.user.findUnique({ where: { telegramId: String(telegramId) } });
+    }
+
+    const targetTgId = targetUser?.telegramId || telegramId;
+
+    if (!targetTgId) {
+      return res.status(400).json({ error: 'Користувача не знайдено' });
+    }
+
+    // Save message to database
+    const savedMsg = await prisma.supportMessage.create({
+      data: {
+        userId: targetUser?.id || 1,
+        senderRole: 'ADMIN',
+        text: text.trim(),
+      },
+    });
+
+    // Send via Telegram bot
+    const formatted = `💬 <b>Повідомлення від адміністрації Біржі Завдань:</b>\n\n${text.trim()}\n\n<i>Ви можете відповісти на це повідомлення прямо в цьому чаті з ботом.</i>`;
+    const tgRes = await sendTelegramNotification(targetTgId, formatted);
+
+    res.json({ success: true, message: savedMsg, telegramResult: tgRes });
+  } catch (error) {
+    console.error('Error sending message to user:', error);
+    res.status(500).json({ error: 'Помилка надсилання повідомлення' });
+  }
+});
+
+// Admin App Settings (Configure Telegram ID)
+router.get('/settings', async (req, res) => {
+  try {
+    const settings = await prisma.appSetting.findMany();
+    const map = {};
+    settings.forEach((s) => { map[s.key] = s.value; });
+    res.json(map);
+  } catch (error) {
+    res.status(500).json({ error: 'Помилка отримання налаштувань' });
+  }
+});
+
+router.post('/settings/admin-id', async (req, res) => {
+  try {
+    const { telegramId } = req.body;
+    if (!telegramId) {
+      return res.status(400).json({ error: 'Вкажіть Telegram ID' });
+    }
+
+    await prisma.appSetting.upsert({
+      where: { key: 'ADMIN_TELEGRAM_ID' },
+      create: { key: 'ADMIN_TELEGRAM_ID', value: String(telegramId) },
+      update: { value: String(telegramId) },
+    });
+
+    // Also update role for this user if exists
+    await prisma.user.updateMany({
+      where: { telegramId: String(telegramId) },
+      data: { role: 'ADMIN' },
+    });
+
+    // Send test greeting to new Admin
+    sendTelegramNotification(
+      telegramId,
+      `👑 <b>Вас призначено Головним Адміністратором Біржі Завдань!</b>\n\nТепер усі сповіщення про чеки, скарги та запити користувачів будуть надходити сюди.`
+    ).catch(console.error);
+
+    res.json({ success: true, adminId: telegramId });
+  } catch (error) {
+    console.error('Error saving admin ID:', error);
+    res.status(500).json({ error: 'Помилка збереження Telegram ID' });
   }
 });
 

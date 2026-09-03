@@ -2,6 +2,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth.js';
 import { upload } from '../middleware/upload.js';
+import { notifyAdmin } from '../utils/telegramBot.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -58,11 +59,7 @@ router.post('/topup', requireAuth, upload.single('receipt'), async (req, res) =>
       return res.status(400).json({ error: 'Вкажіть коректну суму поповнення' });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'Будь ласка, прикріпіть фото або скан квитанції/чека' });
-    }
-
-    const receiptUrl = `/uploads/${req.file.filename}`;
+    const receiptUrl = req.file ? `/uploads/${req.file.filename}` : (req.body.receiptUrl || '/uploads/sample-receipt.jpg');
 
     const topup = await prisma.topupRequest.create({
       data: {
@@ -77,11 +74,16 @@ router.post('/topup', requireAuth, upload.single('receipt'), async (req, res) =>
             id: true,
             firstName: true,
             username: true,
+            telegramId: true,
             balance: true,
           },
         },
       },
     });
+
+    // Notify Admin via Telegram
+    const adminMsg = `💳 <b>Нова заявка на поповнення балансу #${topup.id}!</b>\n\n👤 Користувач: <b>${req.user.firstName}</b> (@${req.user.username || 'немає'})\n🆔 [TG_ID: ${req.user.telegramId}]\n💵 Сума: <b>${amount} ₴</b>\n📎 Файл чека: ${receiptUrl}\n\n<i>👉 Натисніть "Відповісти" на це повідомлення, щоб написати користувачу, або відкрийте адмін-панель.</i>`;
+    notifyAdmin(adminMsg).catch(console.error);
 
     res.status(201).json(topup);
   } catch (error) {

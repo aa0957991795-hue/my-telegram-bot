@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { PORT } from './config.js';
 import { authMiddleware } from './middleware/auth.js';
+import { processTelegramUpdate } from './utils/telegramBot.js';
 
 import authRouter from './routes/auth.js';
 import catalogRouter from './routes/catalog.js';
@@ -25,6 +26,17 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static uploads
 const uploadsPath = path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadsPath));
+
+// Telegram Bot Webhook (handles incoming bot updates)
+app.post('/api/bot/webhook', async (req, res) => {
+  try {
+    await processTelegramUpdate(req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Webhook error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Global Auth middleware (reads Telegram initData or Dev headers)
 app.use(authMiddleware);
@@ -50,3 +62,5 @@ app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Uploads available at http://localhost:${PORT}/uploads/`);
 });
+
+export default app;
