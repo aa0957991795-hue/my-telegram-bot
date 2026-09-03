@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Header from './components/Header.jsx';
 import BottomNav from './components/BottomNav.jsx';
+import SplashScreen from './components/SplashScreen.jsx';
 
 import TaskList from './pages/TaskList.jsx';
 import TaskDetails from './pages/TaskDetails.jsx';
@@ -10,8 +12,25 @@ import Profile from './pages/Profile.jsx';
 import Admin from './pages/Admin.jsx';
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    // If already shown in this tab session, we can skip or show once
+    const alreadyShown = sessionStorage.getItem('gig_splash_shown');
+    if (alreadyShown) {
+      setShowSplash(false);
+    }
+  }, []);
+
+  const handleFinishSplash = () => {
+    sessionStorage.setItem('gig_splash_shown', 'true');
+    setShowSplash(false);
+  };
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-ink flex flex-col">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
+      {showSplash && <SplashScreen onFinish={handleFinishSplash} />}
+
       <Header />
 
       <main className="flex-1">

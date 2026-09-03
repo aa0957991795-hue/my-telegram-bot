@@ -3,20 +3,35 @@ import { api } from '../api/client.js';
 
 const AuthContext = createContext(null);
 
-const DEFAULT_CITIES = [
+export const UKRAINIAN_CITIES = [
   { id: 1, name: 'Київ' },
   { id: 2, name: 'Харків' },
   { id: 3, name: 'Одеса' },
   { id: 4, name: 'Дніпро' },
   { id: 5, name: 'Львів' },
   { id: 6, name: 'Запоріжжя' },
+  { id: 7, name: 'Кривий Ріг' },
+  { id: 8, name: 'Миколаїв' },
+  { id: 9, name: 'Вінниця' },
+  { id: 10, name: 'Полтава' },
+  { id: 11, name: 'Чернігів' },
+  { id: 12, name: 'Черкаси' },
+  { id: 13, name: 'Житомир' },
+  { id: 14, name: 'Суми' },
+  { id: 15, name: 'Хмельницький' },
+  { id: 16, name: 'Чернівці' },
+  { id: 17, name: 'Рівне' },
+  { id: 18, name: 'Івано-Франківськ' },
+  { id: 19, name: 'Тернопіль' },
+  { id: 20, name: 'Луцьк' },
+  { id: 21, name: 'Ужгород' },
 ];
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [devUsers, setDevUsers] = useState([]);
-  const [cities, setCities] = useState(DEFAULT_CITIES);
+  const [cities, setCities] = useState(UKRAINIAN_CITIES);
   const [tgUser, setTgUser] = useState(null);
   const [colorScheme, setColorScheme] = useState('light');
 
@@ -69,11 +84,20 @@ export function AuthProvider({ children }) {
 
   async function loadInitialData() {
     setLoading(true);
+
+    const savedCityId = localStorage.getItem('selected_city_id');
+    const savedCityName = localStorage.getItem('selected_city_name');
+    const initialCity = savedCityId
+      ? { id: parseInt(savedCityId, 10), name: savedCityName || 'Київ' }
+      : { id: 1, name: 'Київ' };
+
     try {
-      // 1. Fetch cities
+      // 1. Fetch cities from API if available
       const citiesRes = await api.get('/catalog/cities').catch(() => null);
-      if (Array.isArray(citiesRes?.data)) {
+      if (Array.isArray(citiesRes?.data) && citiesRes.data.length > 0) {
         setCities(citiesRes.data);
+      } else {
+        setCities(UKRAINIAN_CITIES);
       }
 
       // 2. Fetch test users for dev mode if enabled
@@ -87,7 +111,12 @@ export function AuthProvider({ children }) {
       // 3. Fetch current authenticated profile
       const profileRes = await api.get('/auth/me').catch(() => null);
       if (profileRes?.data && typeof profileRes.data === 'object' && profileRes.data.id) {
-        setUser(profileRes.data);
+        const userData = profileRes.data;
+        if (!userData.city && initialCity) {
+          userData.city = initialCity;
+          userData.cityId = initialCity.id;
+        }
+        setUser(userData);
       } else {
         // Fallback user profile (from Telegram initData if available or guest)
         const tgData = window?.Telegram?.WebApp?.initDataUnsafe?.user;
@@ -99,7 +128,8 @@ export function AuthProvider({ children }) {
           balance: 0,
           role: 'USER',
           commissionOverridePercent: 0.0,
-          city: { name: 'Київ', id: 1 },
+          cityId: initialCity.id,
+          city: initialCity,
         });
       }
     } catch (err) {
@@ -134,18 +164,18 @@ export function AuthProvider({ children }) {
     await reloadProfile();
   }
 
-  async function updateCity(cityId) {
-    try {
-      const res = await api.put('/profile', { cityId }).catch(() => null);
-      if (res?.data && typeof res.data === 'object' && res.data.id) {
-        setUser(res.data);
-      } else {
-        const found = cities.find((c) => c.id === cityId);
-        setUser((prev) => (prev ? { ...prev, cityId, city: found || prev.city } : prev));
-      }
-    } catch (e) {
-      console.error('Помилка оновлення міста:', e);
-    }
+  function updateCity(cityId, cityName) {
+    const selectedCityObj = cities.find((c) => String(c.id) === String(cityId)) || {
+      id: parseInt(cityId, 10),
+      name: cityName || 'Київ',
+    };
+
+    localStorage.setItem('selected_city_id', String(selectedCityObj.id));
+    localStorage.setItem('selected_city_name', selectedCityObj.name);
+
+    setUser((prev) => (prev ? { ...prev, cityId: selectedCityObj.id, city: selectedCityObj } : { cityId: selectedCityObj.id, city: selectedCityObj }));
+
+    api.put('/profile', { cityId: selectedCityObj.id }).catch(() => null);
   }
 
   return (
