@@ -62,7 +62,9 @@ export default function CreateOrder() {
     selectedCategoryObj?.isDelivery ||
     selectedCategoryObj?.name?.toLowerCase().includes("доставк");
 
-  const estimatedCommission = form.price ? Math.round(parseFloat(form.price) * 0.10) : 0;
+  const priceNum = parseFloat(form.price) || 0;
+  const exactCommission = priceNum > 0 ? (priceNum * 0.10).toFixed(0) : '0';
+  const performerPayout = priceNum > 0 ? (priceNum * 0.90).toFixed(0) : '0';
 
   async function submit(e) {
     e.preventDefault();
@@ -250,8 +252,8 @@ export default function CreateOrder() {
         </Field>
       )}
 
-      {/* Required Budget with Commission Information */}
-      <div>
+      {/* Required Budget with Exact 10% Commission Calculation */}
+      <div className="flex flex-col gap-2">
         <Field label="Бюджет завдання (оплата готівкою), ₴ *">
           <input
             required
@@ -264,16 +266,34 @@ export default function CreateOrder() {
           />
         </Field>
 
-        {/* Informative Commission Indicator */}
-        <div className="mt-2 p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs text-slate-600 dark:text-slate-400 flex items-start gap-2">
-          <span className="text-base">💡</span>
-          <div>
-            <div className="font-semibold text-slate-800 dark:text-slate-200">
-              Орієнтовна комісія платформи (10%): <span className="text-emerald-600 dark:text-emerald-400 font-bold">{estimatedCommission} ₴</span>
-            </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Сплачується виконавцем після успішного виконання. Для кожного нового майстра <b>перші 3 завдання — безкоштовні (0 ₴)</b>!
-            </div>
+        {/* Exact Commission Calculation Panel */}
+        <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col gap-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-600 dark:text-slate-400 font-medium">
+              Бюджет замовника:
+            </span>
+            <span className="font-bold text-slate-900 dark:text-white amount">
+              {priceNum} ₴
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200 dark:border-slate-700">
+            <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+              <span>💳</span>
+              <span>Комісія платформи (рівно 10%):</span>
+            </span>
+            <span className="amount text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">
+              {exactCommission} ₴
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+            <span>Виплата виконавцю готівкою:</span>
+            <span className="font-semibold text-slate-700 dark:text-slate-300">{priceNum > 0 ? `${priceNum} ₴` : '0 ₴'}</span>
+          </div>
+
+          <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+            📌 Фіксоване правило: комісія платформи складає рівно 10% від бюджету завдання без винятків. Для кожного нового майстра <b>перші 3 завдання — безкоштовні (0 ₴)</b>.
           </div>
         </div>
       </div>

@@ -11,6 +11,7 @@ export default function TaskCard({ order }) {
   };
 
   const badge = statusBadges[order.status] || statusBadges.OPEN;
+  const commissionAmt = Math.round(Number(order.price || 0) * 0.10);
 
   // Address rendering (structured pickup -> dropoff or single address)
   let displayAddress = "адреса за домовленістю";
@@ -25,12 +26,12 @@ export default function TaskCard({ order }) {
   return (
     <button
       onClick={() => navigate(`/tasks/${order.id}`)}
-      className="ticket-card w-full text-left p-4 pb-4 flex flex-col gap-2.5 active:scale-[0.99] transition-all hover:shadow-md"
+      className="ticket-card w-full text-left p-4 pb-3.5 flex flex-col gap-2.5 active:scale-[0.99] transition-all hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-ink/60 font-medium flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-full">
+            <span className="text-xs text-ink/60 font-medium flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
               <span>{order.Category?.icon}</span>
               <span>{order.Category?.name}</span>
             </span>
@@ -44,8 +45,13 @@ export default function TaskCard({ order }) {
             {order.title}
           </h3>
         </div>
-        <div className="amount text-cash-dark text-lg whitespace-nowrap font-bold">
-          {Number(order.price).toFixed(0)} ₴
+        <div className="text-right">
+          <div className="amount text-cash-dark dark:text-emerald-400 text-lg whitespace-nowrap font-bold">
+            {Number(order.price).toFixed(0)} ₴
+          </div>
+          <div className="text-[10px] text-slate-400">
+            комісія: <b>{commissionAmt} ₴</b>
+          </div>
         </div>
       </div>
 
