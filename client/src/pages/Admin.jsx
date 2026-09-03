@@ -4,17 +4,14 @@ import { api, FILES_URL } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function Admin() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, updateCommissionState } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState('topups'); // 'topups' | 'orders' | 'disputes' | 'messages' | 'settings' | 'banners'
+  const [tab, setTab] = useState('topups'); // 'topups' | 'orders' | 'disputes' | 'messages'
   const [topups, setTopups] = useState([]);
   const [orders, setOrders] = useState([]);
   const [disputes, setDisputes] = useState([]);
   const [messages, setMessages] = useState([]);
-  const [selectedUserChat, setSelectedUserChat] = useState(null);
-  const [chatHistory, setChatHistory] = useState([]);
-  const [replyText, setReplyText] = useState('');
   const [adminTelegramId, setAdminTelegramId] = useState('');
   const [stats, setStats] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -25,18 +22,6 @@ export default function Admin() {
   const [quickMsgUser, setQuickMsgUser] = useState(null);
   const [quickMsgText, setQuickMsgText] = useState('');
   const [quickMsgBusy, setQuickMsgBusy] = useState(false);
-
-  // New Banner Form State
-  const [bannerForm, setBannerForm] = useState({
-    title: '',
-    description: '',
-    targetUrl: '',
-    imageUrl: '',
-    cityId: '',
-    isActive: 'true',
-  });
-  const [bannerFile, setBannerFile] = useState(null);
-  const [bannerBusy, setBannerBusy] = useState(false);
 
   // If not admin, redirect to home
   useEffect(() => {
@@ -51,10 +36,10 @@ export default function Admin() {
       const localOrders = JSON.parse(localStorage.getItem('custom_created_orders') || '[]');
       const localDisputes = JSON.parse(localStorage.getItem('custom_disputes') || '[]');
       const localMessages = JSON.parse(localStorage.getItem('custom_admin_messages') || '[]');
-      const storedAdminId = localStorage.getItem('admin_telegram_id') || '';
+      const storedAdminId = localStorage.getItem('admin_telegram_id') || '7622124912';
       return { localTopups, localOrders, localDisputes, localMessages, storedAdminId };
     } catch {
-      return { localTopups: [], localOrders: [], localDisputes: [], localMessages: [], storedAdminId: '' };
+      return { localTopups: [], localOrders: [], localDisputes: [], localMessages: [], storedAdminId: '7622124912' };
     }
   }
 
@@ -113,7 +98,17 @@ export default function Admin() {
       );
       localStorage.setItem('custom_topup_requests', JSON.stringify(updated));
 
-      setNotification({ type: 'success', text: 'Квитанцію підтверджено, баланс нараховано користувачу!' });
+      // Automatically unblock performer
+      updateCommissionState({
+        isBlockedForCommission: false,
+        pendingCommissionAmount: 0,
+        pendingCommissionOrderId: null,
+      });
+
+      setNotification({
+        type: 'success',
+        text: 'Оплату комісії підтверджено! Статус змінено на "Оплачено", блокування користувача успішно знято.',
+      });
       await load();
     } catch (err) {
       setNotification({ type: 'error', text: 'Помилка підтвердження' });
@@ -123,17 +118,20 @@ export default function Admin() {
   }
 
   async function rejectTopup(id) {
+    const reason = window.prompt("Вкажіть причину відхилення чека (буде показано користувачу):", "Сума в чеку не відповідає комісії або чек не читається");
+    if (reason === null) return;
+
     setBusyId(id);
     try {
-      await api.post(`/admin/topups/${id}/reject`).catch(() => null);
+      await api.post(`/admin/topups/${id}/reject`, { comment: reason }).catch(() => null);
 
       const localTopups = JSON.parse(localStorage.getItem('custom_topup_requests') || '[]');
       const updated = localTopups.map((item) =>
-        item.id === id ? { ...item, status: 'rejected' } : item
+        item.id === id ? { ...item, status: 'rejected', adminComment: reason } : item
       );
       localStorage.setItem('custom_topup_requests', JSON.stringify(updated));
 
-      setNotification({ type: 'info', text: 'Заявку на поповнення відхилено' });
+      setNotification({ type: 'info', text: `Чек відхилено з причиною: «${reason}»` });
       await load();
     } catch (err) {
       setNotification({ type: 'error', text: 'Помилка відхилення' });
@@ -196,16 +194,10 @@ export default function Admin() {
       createdAt: new Date().toISOString(),
     };
 
-    // Save locally
     try {
       const existing = JSON.parse(localStorage.getItem('custom_admin_messages') || '[]');
       localStorage.setItem('custom_admin_messages', JSON.stringify([newMsg, ...existing]));
-    } catch (err) {
-      console.warn('LocalStorage error:', err);
-    }
 
-    // Send via API
-    try {
       await api.post('/admin/messages/send', {
         userId: quickMsgUser.id,
         telegramId: quickMsgUser.telegramId,
@@ -223,26 +215,6 @@ export default function Admin() {
       setNotification({ type: 'error', text: 'Помилка надсилання повідомлення' });
     } finally {
       setQuickMsgBusy(false);
-    }
-  }
-
-  async function handleSaveAdminId(e) {
-    e.preventDefault();
-    if (!adminTelegramId.trim()) return;
-
-    localStorage.setItem('admin_telegram_id', adminTelegramId.trim());
-
-    try {
-      await api.post('/admin/settings/admin-id', { telegramId: adminTelegramId.trim() }).catch(() => null);
-      setNotification({
-        type: 'success',
-        text: `Ваш Telegram ID (${adminTelegramId}) збережено! Тепер сповіщення про чеки та скарги надходитимуть вам у Telegram.`,
-      });
-    } catch {
-      setNotification({
-        type: 'info',
-        text: `Telegram ID (${adminTelegramId}) збережено локально.`,
-      });
     }
   }
 
@@ -270,13 +242,13 @@ export default function Admin() {
         </div>
         <span className="text-[10px] bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border border-red-200 dark:border-red-800/50">
           <span>👑</span>
-          <span>ADMIN ONLY</span>
+          <span>ADMIN ID: {adminTelegramId}</span>
         </span>
       </div>
 
       {notification && (
         <div
-          className={`p-3 rounded-xl text-xs font-medium flex items-center justify-between ${
+          className={`p-3.5 rounded-xl text-xs font-medium flex items-center justify-between ${
             notification.type === 'success'
               ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
               : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200'
@@ -286,37 +258,6 @@ export default function Admin() {
           <button onClick={() => setNotification(null)} className="opacity-60 hover:opacity-100">✕</button>
         </div>
       )}
-
-      {/* Admin Telegram ID Connection Box */}
-      <form onSubmit={handleSaveAdminId} className="ticket-card p-3.5 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-bold flex items-center gap-1.5 text-emerald-400">
-            <span>🤖</span>
-            <span>Підключення сповіщень Telegram:</span>
-          </div>
-          <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full text-slate-300">
-            {adminTelegramId ? '✓ Підключено' : 'Потрібен ID'}
-          </span>
-        </div>
-        <p className="text-[11px] text-slate-300 leading-tight">
-          Введіть ваш Telegram ID (дізнайтеся через <b>@userinfobot</b>), щоб бот пересилав вам усі чеки, скарги та запити.
-        </p>
-        <div className="flex gap-2 mt-1">
-          <input
-            type="text"
-            className="input bg-white/10 border-white/20 text-white placeholder:text-slate-400 text-xs flex-1 py-1.5"
-            placeholder="Ваш Telegram ID (напр. 123456789)"
-            value={adminTelegramId}
-            onChange={(e) => setAdminTelegramId(e.target.value)}
-          />
-          <button
-            type="submit"
-            className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95"
-          >
-            Зберегти
-          </button>
-        </div>
-      </form>
 
       {/* Metric Stats */}
       {stats && (
@@ -336,7 +277,7 @@ export default function Admin() {
             tab === 'topups' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
           }`}
         >
-          💳 Чеки ({pendingTopups.length})
+          💳 Чеки та комісії ({pendingTopups.length})
         </button>
         <button
           onClick={() => setTab('orders')}
@@ -364,92 +305,116 @@ export default function Admin() {
         </button>
       </div>
 
-      {/* TAB 1: Topup Receipts */}
+      {/* TAB 1: Topup Receipts & Commission Verifications */}
       {tab === 'topups' && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="font-display font-semibold text-sm text-slate-900 dark:text-white">
-              Квитанції та чеки на перевірку ({topups.length})
+              Чеки та комісії на перевірку ({topups.length})
             </h2>
             <button onClick={load} className="text-xs text-cash-dark dark:text-emerald-400 hover:underline font-medium">
               Оновити
             </button>
           </div>
 
-          {topups.map((t) => (
-            <div key={t.id} className="ticket-card p-3.5 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <span>{t.User?.firstName || 'Користувач'}</span>
-                    {t.User?.username && <span className="text-xs text-slate-400">@{t.User.username}</span>}
+          {topups.map((t) => {
+            const calculatedActualPrice = t.actualPrice || (t.amount ? t.amount * 10 : 1000);
+            return (
+              <div key={t.id} className="ticket-card p-3.5 flex flex-col gap-2.5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>👤 {t.User?.firstName || 'Виконавець'}</span>
+                      {t.User?.username && <span className="text-xs text-slate-400">@{t.User.username}</span>}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      TG ID: <b>{t.User?.telegramId || t.User?.id || '7622124912'}</b> • {new Date(t.createdAt).toLocaleString('uk-UA')}
+                    </div>
+                    {t.orderId && (
+                      <div className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-0.5">
+                        📌 Завдання #{t.orderId}: {t.orderTitle || 'Виконане завдання'}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-xs text-slate-500">
-                    ID: {t.User?.telegramId || t.User?.id} • {new Date(t.createdAt).toLocaleString('uk-UA')}
-                  </div>
-                </div>
-                <div className="amount text-cash-dark dark:text-emerald-400 text-lg font-bold">
-                  +{Number(t.amount).toFixed(0)} ₴
-                </div>
-              </div>
 
-              {/* Receipt Image Preview */}
-              {t.receiptUrl && (
-                <div
-                  onClick={() => setPreviewImage(t.receiptUrl.startsWith('data:') ? t.receiptUrl : `${FILES_URL}${t.receiptUrl}`)}
-                  className="cursor-pointer group relative bg-slate-50 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700"
-                >
-                  <img
-                    src={t.receiptUrl.startsWith('data:') ? t.receiptUrl : `${FILES_URL}${t.receiptUrl}`}
-                    alt="чек"
-                    className="w-full max-h-48 object-contain rounded-lg group-hover:opacity-90"
-                  />
-                  <div className="text-[11px] text-center text-slate-500 mt-1">
-                    🔍 Натисніть для збільшення чека
+                  <div className="text-right">
+                    <div className="text-[10px] text-slate-400">Комісія (10%):</div>
+                    <div className="amount text-cash-dark dark:text-emerald-400 text-lg font-bold">
+                      +{Number(t.amount).toFixed(0)} ₴
+                    </div>
                   </div>
                 </div>
-              )}
 
-              {/* Action Buttons */}
-              <div className="flex flex-col gap-2 pt-1">
-                <div className="flex items-center justify-between">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    t.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
-                    t.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {t.status === 'approved' ? 'Схвалено ✓' : t.status === 'rejected' ? 'Відхилено ✕' : 'Очікує перевірки ⏳'}
-                  </span>
+                {/* Deal Details Box */}
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Фактична сума угоди:</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{calculatedActualPrice} ₴</span>
+                </div>
 
-                  <button
-                    onClick={() => setQuickMsgUser({ id: t.User?.id, telegramId: t.User?.telegramId, firstName: t.User?.firstName })}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
+                {/* Receipt Image Preview */}
+                {t.receiptUrl && (
+                  <div
+                    onClick={() => setPreviewImage(t.receiptUrl.startsWith('data:') ? t.receiptUrl : `${FILES_URL}${t.receiptUrl}`)}
+                    className="cursor-pointer group relative bg-slate-50 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700"
                   >
-                    <span>💬</span>
-                    <span>Написати користувачу</span>
-                  </button>
-                </div>
-
-                {t.status === 'pending' && (
-                  <div className="flex gap-2 mt-1">
-                    <button
-                      disabled={busyId === t.id}
-                      onClick={() => approveTopup(t.id)}
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full py-2.5 text-xs font-semibold shadow-sm active:scale-95 transition-all"
-                    >
-                      {busyId === t.id ? 'Обробка...' : '✓ Схвалити та нарахувати'}
-                    </button>
-                    <button
-                      disabled={busyId === t.id}
-                      onClick={() => rejectTopup(t.id)}
-                      className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-slate-200 rounded-full py-2.5 text-xs font-semibold active:scale-95 transition-all"
-                    >
-                      ✕ Відхилити
-                    </button>
+                    <img
+                      src={t.receiptUrl.startsWith('data:') ? t.receiptUrl : `${FILES_URL}${t.receiptUrl}`}
+                      alt="чек"
+                      className="w-full max-h-48 object-contain rounded-lg group-hover:opacity-90"
+                    />
+                    <div className="text-[11px] text-center text-slate-500 mt-1">
+                      🔍 Натисніть для збільшення чека
+                    </div>
                   </div>
                 )}
+
+                {/* Status & Actions */}
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      t.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                      t.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {t.status === 'approved' ? 'Оплачено (Підтверджено) ✓' : t.status === 'rejected' ? 'Відхилено ✕' : 'На перевірці ⏳'}
+                    </span>
+
+                    <button
+                      onClick={() => setQuickMsgUser({ id: t.User?.id, telegramId: t.User?.telegramId, firstName: t.User?.firstName })}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
+                    >
+                      <span>💬</span>
+                      <span>Написати</span>
+                    </button>
+                  </div>
+
+                  {t.adminComment && (
+                    <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg border border-red-200">
+                      Причина відхилення: {t.adminComment}
+                    </div>
+                  )}
+
+                  {t.status === 'pending' && (
+                    <div className="flex gap-2 mt-1">
+                      <button
+                        disabled={busyId === t.id}
+                        onClick={() => approveTopup(t.id)}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full py-2.5 text-xs font-semibold shadow-sm active:scale-95 transition-all"
+                      >
+                        {busyId === t.id ? 'Обробка...' : '✓ Підтвердити оплату та розблокувати'}
+                      </button>
+                      <button
+                        disabled={busyId === t.id}
+                        onClick={() => rejectTopup(t.id)}
+                        className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-slate-200 rounded-full py-2.5 text-xs font-semibold active:scale-95 transition-all"
+                      >
+                        ✕ Відхилити
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {topups.length === 0 && (
             <div className="text-sm text-slate-400 text-center py-8 ticket-card bg-slate-50 dark:bg-slate-900">
@@ -551,7 +516,7 @@ export default function Admin() {
                   className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
                 >
                   <span>💬</span>
-                  <span>Написати заявнику в Telegram</span>
+                  <span>Написати заявнику</span>
                 </button>
 
                 {d.status === 'OPEN' && (
@@ -575,7 +540,7 @@ export default function Admin() {
         </div>
       )}
 
-      {/* TAB 4: Messages / Client Chat History */}
+      {/* TAB 4: Messages */}
       {tab === 'messages' && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -585,14 +550,6 @@ export default function Admin() {
             <button onClick={load} className="text-xs text-cash-dark dark:text-emerald-400 hover:underline font-medium">
               Оновити
             </button>
-          </div>
-
-          <div className="ticket-card p-3 bg-blue-50/50 dark:bg-blue-950/30 border-blue-200 text-xs text-blue-950 dark:text-blue-200">
-            💡 <b>Як спілкуватися з користувачами:</b>
-            <p className="mt-0.5 text-[11px] text-blue-800 dark:text-blue-300">
-              1. Натисніть кнопку <b>«Написати користувачу»</b> на будь-якій картці чека чи скарги.<br />
-              2. Або відповідайте прямо в Telegram, натиснувши <b>Reply</b> на сповіщення від бота.
-            </p>
           </div>
 
           {messages.map((m) => (
@@ -619,7 +576,7 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Quick Message to User Modal */}
+      {/* Quick Message Modal */}
       {quickMsgUser && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <form

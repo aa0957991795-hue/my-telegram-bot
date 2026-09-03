@@ -100,7 +100,6 @@ export default function TaskList() {
     try {
       const customCreated = JSON.parse(localStorage.getItem('custom_created_orders') || '[]');
       const combined = [...customCreated, ...(serverOrders.length > 0 ? serverOrders : DEFAULT_ORDERS)];
-      // Unique by id
       const seen = new Set();
       return combined.filter((item) => {
         if (!item || !item.id || seen.has(item.id)) return false;
@@ -168,6 +167,7 @@ export default function TaskList() {
   const displayName = user?.firstName || tgUser?.first_name || 'Користувач';
   const photoUrl = tgUser?.photo_url;
   const isFreeCommission = user?.commissionOverridePercent === 0;
+  const isBlocked = Boolean(user?.isBlockedForCommission);
 
   const safeCategories = Array.isArray(categories) ? categories : DEFAULT_CATEGORIES;
   const safeOrders = Array.isArray(orders) ? orders : DEFAULT_ORDERS;
@@ -200,7 +200,6 @@ export default function TaskList() {
       
       {/* 1. App Header / User Welcome Hero Card */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-850 to-slate-800 text-white p-5 rounded-3xl shadow-lg border border-slate-700/50 relative overflow-hidden">
-        {/* Glow decoration */}
         <div className="absolute -top-10 -right-10 w-36 h-36 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl pointer-events-none" />
 
@@ -253,27 +252,41 @@ export default function TaskList() {
             </p>
           </div>
 
-          {/* Quick Badges: Commission status & City */}
+          {/* Free Tasks Progress Pill for Performers */}
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1">
               <span>📍</span> {user?.city?.name || 'Київ'}
             </span>
-            {isFreeCommission ? (
-              <span className="bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                <span>✨</span> 0% комісії (Перші 100)
-              </span>
-            ) : (
-              <span className="bg-white/10 text-slate-300 text-[10px] px-2.5 py-1 rounded-full">
-                💵 Оплата готівкою
-              </span>
-            )}
+            <span className="bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+              <span>🎁</span> Безкоштовних завдань: {Math.max(0, 3 - (user?.freeTasksCompleted || 0))}/3
+            </span>
           </div>
         </div>
       </div>
 
-      {/* 2. Primary Action Buttons (Large & Clear) */}
+      {/* Blocked Performer Global Alert */}
+      {isBlocked && (
+        <div className="p-4 bg-amber-500 text-white rounded-2xl shadow-md flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl">🔒</span>
+            <div>
+              <div className="text-xs font-bold">Взяття нових завдань заблоковано</div>
+              <div className="text-[11px] opacity-90">
+                Сплатіть комісію <b>{user.pendingCommissionAmount} ₴</b> та завантажте чек
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/profile')}
+            className="bg-white text-amber-800 text-xs font-bold px-3 py-1.5 rounded-full shadow-sm whitespace-nowrap active:scale-95"
+          >
+            Сплатити →
+          </button>
+        </div>
+      )}
+
+      {/* 2. Primary Action Buttons */}
       <div className="grid grid-cols-2 gap-3">
-        {/* Button A: Create Task */}
         <button
           onClick={() => navigate('/create')}
           className="group ticket-card p-4 flex flex-col justify-between items-start text-left bg-gradient-to-br from-emerald-50 to-teal-50/60 dark:from-emerald-950/30 dark:to-slate-900 border-emerald-200/80 dark:border-emerald-800/50 hover:shadow-md active:scale-98 transition-all cursor-pointer"
@@ -291,7 +304,6 @@ export default function TaskList() {
           </div>
         </button>
 
-        {/* Button B: Find Tasks / Work */}
         <button
           onClick={() => {
             const feedElem = document.getElementById('task-feed-section');
@@ -313,31 +325,7 @@ export default function TaskList() {
         </button>
       </div>
 
-      {/* 3. Promotional Free Spots Banner for Performers */}
-      {freeSpots && (
-        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white p-4 rounded-2xl shadow-sm relative overflow-hidden">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-emerald-200 font-bold flex items-center gap-1">
-                <span>🎁 АКЦІЯ ДЛЯ МАЙСТРІВ</span>
-              </div>
-              <h2 className="font-display text-sm font-extrabold mt-0.5 leading-snug">
-                Безкоштовних місць: залишилось{' '}
-                <span className="text-amber-300 underline underline-offset-2">
-                  {freeSpots.remainingSpots}
-                </span>{' '}
-                зі {freeSpots.totalFreeSpots}
-              </h2>
-              <p className="text-[11px] text-emerald-100 mt-0.5 leading-relaxed">
-                Перші 100 майстрів працюють з 0% комісії платформи назавжди!
-              </p>
-            </div>
-            <div className="text-2xl select-none">⚡</div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Search Bar */}
+      {/* 3. Search Bar */}
       <form onSubmit={handleSearchSubmit} className="relative flex items-center">
         <input
           type="text"
@@ -361,7 +349,7 @@ export default function TaskList() {
         )}
       </form>
 
-      {/* 5. Interactive Categories (Horizontal scroll with active indicator) */}
+      {/* 4. Interactive Categories */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
@@ -420,10 +408,10 @@ export default function TaskList() {
         </div>
       </div>
 
-      {/* 6. Sponsored Ad Banner Slot (checked via VITE_ADS_ENABLED) */}
+      {/* 5. Sponsored Ad Banner Slot */}
       <SponsoredBannerCard />
 
-      {/* 7. Task List Feed */}
+      {/* 6. Task List Feed */}
       <div id="task-feed-section" className="flex flex-col gap-3 pt-1">
         <div className="flex items-center justify-between">
           <h2 className="font-display font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -467,20 +455,6 @@ export default function TaskList() {
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs">
               Створіть завдання або оберіть іншу категорію робіт.
             </p>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => setSelectedCategory(null)}
-                className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold px-4 py-2 rounded-full"
-              >
-                Всі категорії
-              </button>
-              <button
-                onClick={() => navigate('/create')}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-sm"
-              >
-                + Створити завдання
-              </button>
-            </div>
           </div>
         )}
       </div>

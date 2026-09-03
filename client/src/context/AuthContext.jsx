@@ -5,6 +5,12 @@ const AuthContext = createContext(null);
 
 export const ADMIN_TELEGRAM_IDS = ['7622124912'];
 
+export const PAYMENT_CARD_DETAILS = {
+  cardNumber: '4149 4390 1234 5678',
+  recipient: 'Біржа Завдань / Комісія',
+  bank: 'ПриватБанк / Monobank',
+};
+
 export const UKRAINIAN_CITIES = [
   { id: 1, name: 'Київ' },
   { id: 2, name: 'Харків' },
@@ -93,6 +99,12 @@ export function AuthProvider({ children }) {
       ? { id: parseInt(savedCityId, 10), name: savedCityName || 'Київ' }
       : { id: 1, name: 'Київ' };
 
+    // Load local commission tracking status
+    const localFreeTasks = parseInt(localStorage.getItem('user_free_tasks_completed') || '0', 10);
+    const localBlocked = localStorage.getItem('user_is_blocked_commission') === 'true';
+    const localPendingAmt = parseFloat(localStorage.getItem('user_pending_commission_amount') || '0');
+    const localPendingOrderId = localStorage.getItem('user_pending_commission_order_id');
+
     try {
       // 1. Fetch cities from API if available
       const citiesRes = await api.get('/catalog/cities').catch(() => null);
@@ -118,10 +130,13 @@ export function AuthProvider({ children }) {
           userData.city = initialCity;
           userData.cityId = initialCity.id;
         }
-        // Check if admin by telegramId
         if (ADMIN_TELEGRAM_IDS.includes(String(userData.telegramId))) {
           userData.role = 'ADMIN';
         }
+        userData.freeTasksCompleted = userData.freeTasksCompleted ?? localFreeTasks;
+        userData.isBlockedForCommission = userData.isBlockedForCommission ?? localBlocked;
+        userData.pendingCommissionAmount = userData.pendingCommissionAmount ?? localPendingAmt;
+        userData.pendingCommissionOrderId = userData.pendingCommissionOrderId ?? localPendingOrderId;
         setUser(userData);
       } else {
         // Fallback user profile (from Telegram initData if available or guest)
@@ -140,6 +155,10 @@ export function AuthProvider({ children }) {
           commissionOverridePercent: 0.0,
           cityId: initialCity.id,
           city: initialCity,
+          freeTasksCompleted: localFreeTasks,
+          isBlockedForCommission: localBlocked,
+          pendingCommissionAmount: localPendingAmt,
+          pendingCommissionOrderId: localPendingOrderId ? parseInt(localPendingOrderId, 10) : null,
         });
       }
     } catch (err) {
@@ -166,6 +185,36 @@ export function AuthProvider({ children }) {
     } catch (e) {
       console.error('Помилка оновлення профілю:', e);
     }
+  }
+
+  function updateCommissionState({ freeTasksCompleted, isBlockedForCommission, pendingCommissionAmount, pendingCommissionOrderId }) {
+    if (freeTasksCompleted !== undefined) {
+      localStorage.setItem('user_free_tasks_completed', String(freeTasksCompleted));
+    }
+    if (isBlockedForCommission !== undefined) {
+      localStorage.setItem('user_is_blocked_commission', String(isBlockedForCommission));
+    }
+    if (pendingCommissionAmount !== undefined) {
+      localStorage.setItem('user_pending_commission_amount', String(pendingCommissionAmount));
+    }
+    if (pendingCommissionOrderId !== undefined) {
+      if (pendingCommissionOrderId) {
+        localStorage.setItem('user_pending_commission_order_id', String(pendingCommissionOrderId));
+      } else {
+        localStorage.removeItem('user_pending_commission_order_id');
+      }
+    }
+
+    setUser((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        freeTasksCompleted: freeTasksCompleted !== undefined ? freeTasksCompleted : prev.freeTasksCompleted,
+        isBlockedForCommission: isBlockedForCommission !== undefined ? isBlockedForCommission : prev.isBlockedForCommission,
+        pendingCommissionAmount: pendingCommissionAmount !== undefined ? pendingCommissionAmount : prev.pendingCommissionAmount,
+        pendingCommissionOrderId: pendingCommissionOrderId !== undefined ? pendingCommissionOrderId : prev.pendingCommissionOrderId,
+      };
+    });
   }
 
   async function switchDevUser(userId) {
@@ -218,6 +267,7 @@ export function AuthProvider({ children }) {
         switchDevUser,
         updateCity,
         setAdminRole,
+        updateCommissionState,
         isAdmin,
         isDevModeEnabled,
         isTelegram: Boolean(window?.Telegram?.WebApp?.initData),

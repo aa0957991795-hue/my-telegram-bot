@@ -62,6 +62,8 @@ export default function CreateOrder() {
     selectedCategoryObj?.isDelivery ||
     selectedCategoryObj?.name?.toLowerCase().includes("доставк");
 
+  const estimatedCommission = form.price ? Math.round(parseFloat(form.price) * 0.10) : 0;
+
   async function submit(e) {
     e.preventDefault();
     setBusy(true);
@@ -158,7 +160,7 @@ export default function CreateOrder() {
         </div>
       )}
 
-      <Field label="Що потрібно зробити">
+      <Field label="Що потрібно зробити *">
         <input
           required
           className="input"
@@ -169,7 +171,7 @@ export default function CreateOrder() {
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Категорія">
+        <Field label="Категорія *">
           <select
             required
             className="input"
@@ -184,7 +186,7 @@ export default function CreateOrder() {
           </select>
         </Field>
 
-        <Field label="Місто">
+        <Field label="Місто *">
           <select
             required
             className="input"
@@ -217,7 +219,7 @@ export default function CreateOrder() {
             <span>🚗</span> Маршрут кур'єрської доставки:
           </div>
 
-          <Field label="📍 Звідки (забір посилки / відправник)">
+          <Field label="📍 Звідки (забір посилки / відправник) *">
             <input
               required
               className="input bg-white dark:bg-slate-900"
@@ -227,7 +229,7 @@ export default function CreateOrder() {
             />
           </Field>
 
-          <Field label="🏁 Куди (доставка / одержувач)">
+          <Field label="🏁 Куди (доставка / одержувач) *">
             <input
               required
               className="input bg-white dark:bg-slate-900"
@@ -248,17 +250,33 @@ export default function CreateOrder() {
         </Field>
       )}
 
-      <Field label="Оплата готівкою, ₴">
-        <input
-          required
-          type="number"
-          min="1"
-          className="input amount text-lg"
-          placeholder="500"
-          value={form.price}
-          onChange={(e) => update("price", e.target.value)}
-        />
-      </Field>
+      {/* Required Budget with Commission Information */}
+      <div>
+        <Field label="Бюджет завдання (оплата готівкою), ₴ *">
+          <input
+            required
+            type="number"
+            min="10"
+            className="input amount text-lg"
+            placeholder="500"
+            value={form.price}
+            onChange={(e) => update("price", e.target.value)}
+          />
+        </Field>
+
+        {/* Informative Commission Indicator */}
+        <div className="mt-2 p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs text-slate-600 dark:text-slate-400 flex items-start gap-2">
+          <span className="text-base">💡</span>
+          <div>
+            <div className="font-semibold text-slate-800 dark:text-slate-200">
+              Орієнтовна комісія платформи (10%): <span className="text-emerald-600 dark:text-emerald-400 font-bold">{estimatedCommission} ₴</span>
+            </div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Сплачується виконавцем після успішного виконання. Для кожного нового майстра <b>перші 3 завдання — безкоштовні (0 ₴)</b>!
+            </div>
+          </div>
+        </div>
+      </div>
 
       <button
         disabled={busy}

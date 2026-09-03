@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
-import { useAuth } from '../context/AuthContext.jsx';
+import { useAuth, PAYMENT_CARD_DETAILS } from '../context/AuthContext.jsx';
 
 export default function Profile() {
-  const { user, reloadProfile, devUsers, switchDevUser, isDevModeEnabled, isAdmin, setAdminRole } = useAuth();
+  const { user, reloadProfile, devUsers, switchDevUser, isDevModeEnabled, isAdmin, setAdminRole, updateCommissionState } = useAuth();
   const navigate = useNavigate();
 
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showTopupModal, setShowTopupModal] = useState(false);
-  const [topupAmount, setTopupAmount] = useState('500');
+  const [topupAmount, setTopupAmount] = useState(String(user?.pendingCommissionAmount || 100));
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
   const [topupBusy, setTopupBusy] = useState(false);
@@ -21,12 +21,15 @@ export default function Profile() {
     firstName: user?.firstName || 'Користувач',
     lastName: user?.lastName || '',
     username: user?.username || '',
-    telegramId: user?.telegramId || '1002',
+    telegramId: user?.telegramId || '7622124912',
     balance: user?.balance || 500,
     role: user?.role || 'USER',
     commissionOverridePercent: user?.commissionOverridePercent ?? 0.0,
+    freeTasksCompleted: user?.freeTasksCompleted || 0,
+    isBlockedForCommission: user?.isBlockedForCommission || false,
+    pendingCommissionAmount: user?.pendingCommissionAmount || 0,
     city: user?.city || { name: 'Київ' },
-    _count: { createdOrders: 1, performedOrders: 0 },
+    _count: { createdOrders: 1, performedOrders: user?.freeTasksCompleted || 0 },
     transactions: [
       {
         id: 1,
@@ -57,7 +60,10 @@ export default function Profile() {
 
   useEffect(() => {
     loadProfile();
-  }, [user?.id]);
+    if (user?.pendingCommissionAmount) {
+      setTopupAmount(String(user.pendingCommissionAmount));
+    }
+  }, [user?.id, user?.pendingCommissionAmount]);
 
   function handleFileChange(e) {
     try {
@@ -88,9 +94,15 @@ export default function Profile() {
     setTopupBusy(true);
     setMessage(null);
 
+    const commissionNum = parseFloat(topupAmount) || 100;
+    const isPayingPendingCommission = Boolean(user?.isBlockedForCommission);
+
     const newTopup = {
       id: Date.now(),
-      amount: parseFloat(topupAmount),
+      orderId: user?.pendingCommissionOrderId || null,
+      orderTitle: isPayingPendingCommission ? `Комісія за завдання #${user?.pendingCommissionOrderId}` : 'Поповнення балансу',
+      actualPrice: isPayingPendingCommission ? (commissionNum * 10) : null,
+      amount: commissionNum,
       receiptUrl: receiptPreview || '/uploads/sample-receipt.jpg',
       status: 'pending',
       createdAt: new Date().toISOString(),
@@ -98,7 +110,7 @@ export default function Profile() {
         id: user?.id || 1,
         firstName: user?.firstName || 'Користувач',
         username: user?.username || '',
-        telegramId: user?.telegramId || '1002',
+        telegramId: user?.telegramId || '7622124912',
         balance: user?.balance || 500,
       },
     };
@@ -115,6 +127,7 @@ export default function Profile() {
     // Also send to backend
     const formData = new FormData();
     formData.append('amount', topupAmount);
+    formData.append('orderId', user?.pendingCommissionOrderId || '');
     if (receiptFile) {
       formData.append('receipt', receiptFile);
     }
@@ -128,7 +141,7 @@ export default function Profile() {
 
       setMessage({
         type: 'success',
-        text: 'Чек успішно надіслано на перевірку адміністратору! Баланс буде нараховано після схвалення.',
+        text: 'Чек успішно надіслано на перевірку адміністратору! Після підтвердження блокування буде автоматично знято.',
       });
       setShowTopupModal(false);
       setReceiptFile(null);
@@ -145,7 +158,8 @@ export default function Profile() {
   }
 
   const currentProfile = profileData || fallbackProfile;
-  const isFreeCommission = currentProfile?.commissionOverridePercent === 0;
+  const freeTasksDone = user?.freeTasksCompleted ?? currentProfile?.freeTasksCompleted ?? 0;
+  const isBlocked = Boolean(user?.isBlockedForCommission);
   const safeTransactions = Array.isArray(currentProfile?.transactions) ? currentProfile.transactions : [];
 
   return (
@@ -177,6 +191,39 @@ export default function Profile() {
         </div>
       )}
 
+      {/* Blocked Performer Card */}
+      {isBlocked && (
+        <div className="p-4 bg-amber-500 text-white rounded-2xl shadow-md flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold text-sm">
+              <span>🔒</span>
+              <span>Доступ до нових завдань заблоковано</span>
+            </div>
+            <span className="bg-white/20 text-xs px-2 py-0.5 rounded-full font-bold">
+              {user.pendingCommissionAmount} ₴
+            </span>
+          </div>
+
+          <p className="text-xs opacity-95 leading-relaxed">
+            Ви успішно завершили 4-е (або наступне) завдання #{user.pendingCommissionOrderId}. Сплатіть комісію 10% (<b>{user.pendingCommissionAmount} ₴</b>) на карту та прикріпіть чек.
+          </p>
+
+          <div className="bg-white/10 p-2.5 rounded-xl text-xs font-mono select-all">
+            💳 {PAYMENT_CARD_DETAILS.cardNumber} ({PAYMENT_CARD_DETAILS.recipient})
+          </div>
+
+          <button
+            onClick={() => {
+              setTopupAmount(String(user.pendingCommissionAmount || 100));
+              setShowTopupModal(true);
+            }}
+            className="bg-white text-amber-900 font-bold text-xs py-2.5 px-4 rounded-xl shadow-sm text-center active:scale-95 transition-all"
+          >
+            📤 Завантажити чек про оплату комісії →
+          </button>
+        </div>
+      )}
+
       {/* User Info Card */}
       <div className="ticket-card p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -197,17 +244,37 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Commission Status Pill */}
-          <div className="text-right">
-            {isFreeCommission ? (
-              <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold px-2.5 py-1 rounded-full inline-block shadow-sm">
-                ✨ 0% Комісії (Перші 100)
-              </span>
-            ) : (
-              <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-semibold px-2.5 py-0.5 rounded-full inline-block">
-                Комісія 10%
-              </span>
-            )}
+          {/* Free Tasks Counter Badge */}
+          <div className="text-right flex flex-col items-end gap-1">
+            <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 text-[10px] font-bold px-2.5 py-1 rounded-full inline-block shadow-sm">
+              🎁 Безкоштовних: {Math.max(0, 3 - freeTasksDone)}/3
+            </span>
+            <span className="text-[10px] text-slate-400">
+              {freeTasksDone >= 3 ? 'Комісія 10% активна' : '0% комісії'}
+            </span>
+          </div>
+        </div>
+
+        {/* Free Task Progress Tracker */}
+        <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex flex-col gap-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-slate-700 dark:text-slate-300">
+              Статус безкоштовних завдань:
+            </span>
+            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+              {freeTasksDone}/3 виконано
+            </span>
+          </div>
+          <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+            <div
+              className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+              style={{ width: `${Math.min(100, (freeTasksDone / 3) * 100)}%` }}
+            />
+          </div>
+          <div className="text-[10px] text-slate-400">
+            {freeTasksDone < 3
+              ? `У вас залишилось ${3 - freeTasksDone} безкоштовних завдань без комісії платформі.`
+              : 'Ви використали 3 безкоштовних завдання. Наступні завдання — комісія 10%.'}
           </div>
         </div>
 
@@ -224,7 +291,7 @@ export default function Profile() {
             onClick={() => setShowTopupModal(true)}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2.5 rounded-full shadow-sm active:scale-95 transition-all"
           >
-            + Поповнити
+            + Поповнити / Чек
           </button>
         </div>
 
@@ -234,25 +301,25 @@ export default function Profile() {
             <div className="text-sm font-bold text-slate-900 dark:text-white">
               {currentProfile?._count?.createdOrders || 0}
             </div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Створено завдань</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">Створено замовлень</div>
           </div>
           <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
             <div className="text-sm font-bold text-slate-900 dark:text-white">
-              {currentProfile?._count?.performedOrders || 0}
+              {freeTasksDone}
             </div>
             <div className="text-[10px] text-slate-500 dark:text-slate-400">Виконано завдань</div>
           </div>
         </div>
       </div>
 
-      {/* Admin Access Toggle for testing */}
+      {/* Admin Access Toggle */}
       <div className="p-3 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
         <div>
           <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
             {isAdmin ? '👑 Режим адміністратора увімкнено' : '🔒 Доступ адміністратора'}
           </div>
           <div className="text-[10px] text-slate-500">
-            {isAdmin ? 'Адмін-панель доступна для перегляду чеків та скарг' : 'Доступний перегляд панелі модерації'}
+            {isAdmin ? 'Адмін-панель доступна для підтвердження чеків' : 'Доступний перегляд модерації'}
           </div>
         </div>
         <button
@@ -304,7 +371,7 @@ export default function Profile() {
         )}
       </div>
 
-      {/* Topup Modal */}
+      {/* Topup / Commission Receipt Modal */}
       {showTopupModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <form
@@ -313,8 +380,12 @@ export default function Profile() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-base text-slate-900 dark:text-white">Поповнення рахунку</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Завантажте чек про здійснену оплату</p>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                  {isBlocked ? 'Сплата комісії платформи' : 'Завантаження чека / Поповнення'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {isBlocked ? `Комісія за завдання #${user.pendingCommissionOrderId}` : 'Завантажте чек про оплату'}
+                </p>
               </div>
               <button
                 type="button"
@@ -329,27 +400,20 @@ export default function Profile() {
               </button>
             </div>
 
-            {/* Amount Selection */}
+            {/* Requisites */}
+            <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs flex flex-col gap-1 border border-slate-200 dark:border-slate-700">
+              <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Реквізити для оплати:</span>
+              <div className="font-mono font-bold text-sm text-emerald-600 select-all">
+                {PAYMENT_CARD_DETAILS.cardNumber}
+              </div>
+              <span className="text-[11px] text-slate-500">{PAYMENT_CARD_DETAILS.recipient} ({PAYMENT_CARD_DETAILS.bank})</span>
+            </div>
+
+            {/* Amount */}
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">
-                Сума поповнення, ₴
+                Сума за чеком, ₴
               </label>
-              <div className="grid grid-cols-3 gap-2 mb-2">
-                {['200', '500', '1000'].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => setTopupAmount(amt)}
-                    className={`py-2 rounded-xl text-xs font-bold transition-all ${
-                      topupAmount === amt
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
-                    }`}
-                  >
-                    {amt} ₴
-                  </button>
-                ))}
-              </div>
               <input
                 required
                 type="number"
@@ -357,11 +421,11 @@ export default function Profile() {
                 className="input amount text-lg"
                 value={topupAmount}
                 onChange={(e) => setTopupAmount(e.target.value)}
-                placeholder="Власна сума"
+                placeholder="100"
               />
             </div>
 
-            {/* Receipt Upload Box */}
+            {/* Receipt File */}
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 block">
                 Фото / Скриншот квитанції
@@ -389,7 +453,7 @@ export default function Profile() {
                   <div className="flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400">
                     <span className="text-2xl">📸</span>
                     <span className="text-xs font-medium">Натисніть для вибору файлу чека</span>
-                    <span className="text-[10px] text-slate-400">PNG, JPG, PDF до 10MB</span>
+                    <span className="text-[10px] text-slate-400">PNG, JPG, PDF</span>
                   </div>
                 )}
               </div>

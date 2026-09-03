@@ -19,6 +19,13 @@ model User {
   balance                   Float    @default(0)
   role                      String   @default("USER") // "USER" or "ADMIN"
   commissionOverridePercent Float?   // 0.0 for first 100 users, null for 10% standard
+  
+  // Commission & Free Tasks counter
+  freeTasksCompleted        Int      @default(0) // First 3 tasks are free
+  isBlockedForCommission    Boolean  @default(false) // Blocked if 4th+ task commission unpaid
+  pendingCommissionAmount   Float    @default(0)
+  pendingCommissionOrderId  Int?
+
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
@@ -51,7 +58,11 @@ model Order {
   id             Int      @id @default(autoincrement())
   title          String
   description    String?
-  price          Float
+  price          Float    // Initial Budget set by customer
+  actualPrice    Float?   // Actual deal amount confirmed upon completion
+  commissionAmount Float? // Calculated 10% commission if 4th+ task
+  isFreeTask     Boolean  @default(false)
+  
   address        String?
   pickupAddress  String?
   dropoffAddress String?
@@ -104,7 +115,9 @@ model TopupRequest {
   id           Int      @id @default(autoincrement())
   userId       Int
   User         User     @relation(fields: [userId], references: [id])
-  amount       Float
+  orderId      Int?
+  actualPrice  Float?
+  amount       Float    // Commission amount or topup amount
   receiptUrl   String
   status       String   @default("pending") // "pending", "approved", "rejected"
   adminComment String?
