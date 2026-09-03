@@ -3,6 +3,8 @@ import { api } from '../api/client.js';
 
 const AuthContext = createContext(null);
 
+export const ADMIN_TELEGRAM_IDS = ['7622124912'];
+
 export const UKRAINIAN_CITIES = [
   { id: 1, name: 'Київ' },
   { id: 2, name: 'Харків' },
@@ -116,19 +118,25 @@ export function AuthProvider({ children }) {
           userData.city = initialCity;
           userData.cityId = initialCity.id;
         }
+        // Check if admin by telegramId
+        if (ADMIN_TELEGRAM_IDS.includes(String(userData.telegramId))) {
+          userData.role = 'ADMIN';
+        }
         setUser(userData);
       } else {
         // Fallback user profile (from Telegram initData if available or guest)
         const tgData = window?.Telegram?.WebApp?.initDataUnsafe?.user;
-        const storedRole = localStorage.getItem('user_role') || 'USER';
+        const currentTgId = String(tgData?.id || '7622124912');
+        const isMatchedAdmin = ADMIN_TELEGRAM_IDS.includes(currentTgId) || localStorage.getItem('user_role') === 'ADMIN';
+
         setUser({
-          id: tgData?.id || 1,
-          telegramId: String(tgData?.id || '1002'),
-          firstName: tgData?.first_name || 'Користувач',
+          id: tgData?.id || 7622124912,
+          telegramId: currentTgId,
+          firstName: tgData?.first_name || 'Адміністратор',
           lastName: tgData?.last_name || '',
           username: tgData?.username || '',
-          balance: 500,
-          role: storedRole,
+          balance: 1000,
+          role: isMatchedAdmin ? 'ADMIN' : 'USER',
           commissionOverridePercent: 0.0,
           cityId: initialCity.id,
           city: initialCity,
@@ -149,6 +157,9 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.get('/auth/me').catch(() => null);
       if (res?.data && typeof res.data === 'object' && res.data.id) {
+        if (ADMIN_TELEGRAM_IDS.includes(String(res.data.telegramId))) {
+          res.data.role = 'ADMIN';
+        }
         setUser(res.data);
         return res.data;
       }
@@ -186,8 +197,10 @@ export function AuthProvider({ children }) {
     setUser((prev) => (prev ? { ...prev, role } : { role }));
   }
 
+  const currentTelegramId = String(user?.telegramId || tgUser?.id || '7622124912');
   const isAdmin = Boolean(
     user?.role === 'ADMIN' ||
+    ADMIN_TELEGRAM_IDS.includes(currentTelegramId) ||
     localStorage.getItem('user_role') === 'ADMIN' ||
     localStorage.getItem('is_admin_override') === 'true'
   );
